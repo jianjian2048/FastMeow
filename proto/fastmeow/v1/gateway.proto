@@ -1,20 +1,19 @@
-// FastMeow Gateway API — minimal Phase 1 contract.
+// FastMeow Gateway API — 最小 Phase 1 合约。
 //
-// Stability: this file is the public boundary between the Python SDK and the
-// Go sidecar. Once tagged v1.0, additions are allowed (new RPCs, new event
-// variants, new optional fields) but existing fields are immutable. Removals
-// require a new package version (fastmeow.v2).
+// 稳定性：此文件是 Python SDK 与 Go sidecar 之间的公共边界。
+// 一旦标记为 v1.0，允许添加（新 RPC、新事件变体、新可选字段），
+// 但现有字段是不可变的。删除操作需要新的包版本 (fastmeow.v2)。
 //
-// Phase 1 scope:
-//   - Single sidecar process hosting N whatsmeow.Client instances.
-//   - QR pairing + text message send/receive.
-//   - Server-streaming events (no bidi, no soft events by default).
+// Phase 1 范围：
+//   - 单个 sidecar 进程托管 N 个 whatsmeow.Client 实例。
+//   - QR 配对 + 文本消息发送/接收。
+//   - 服务端流式事件（无双向流，默认无软事件）。
 //
-// Not in Phase 1 (reserved field numbers held for later):
-//   - Media (image/audio/video/document) send & receive.
-//   - Reactions, edits, revokes.
-//   - Receipts, presence, group metadata.
-//   - Sharded sidecar coordination (single sidecar_id="default" in Phase 1).
+// 不在 Phase 1 范围内（保留字段编号以备后用）：
+//   - 媒体（图片/音频/视频/文档）发送与接收。
+//   - 回应 (Reactions)、编辑、撤回。
+//   - 回执、在线状态、群组元数据。
+//   - 分片 sidecar 协同（Phase 1 中仅单个 sidecar_id="default"）。
 
 syntax = "proto3";
 
@@ -25,128 +24,123 @@ import "google/protobuf/timestamp.proto";
 option go_package = "github.com/jianjian2048/fastmeow/gen/go/fastmeow/v1;fastmeowv1";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Service
+// Service (服务)
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// Convention: every RPC has a dedicated *Response message even when the body
-// is currently empty or trivial. This lets us add response fields later
-// without breaking the wire.
+// 惯例：即使包体目前为空或微不足道，每个 RPC 也有专用的 *Response 消息。
+// 这让我们以后可以在不破坏 wire 协议的情况下添加响应字段。
 
 service GatewayService {
-  // Health & version handshake. Called by the supervisor right after spawn to
-  // verify the sidecar is alive and protocol-compatible.
+  // 健康检查与版本握手。由 supervisor 在启动后立即调用，
+  // 以验证 sidecar 是否存活且协议兼容。
   rpc Ping(PingRequest) returns (PingResponse);
 
-  // Idempotently register an account_key with the sidecar. If the key is new,
-  // a fresh whatsmeow Device is created (unpaired). If it exists, the existing
-  // device is returned. Must be called before Connect.
+  // 幂等地向 sidecar 注册 账号 / account_key。如果 key 是新的，
+  // 则创建一个新的 whatsmeow 设备（未配对）。如果已存在，
+  // 则返回现有设备。必须在 Connect 之前调用。
   rpc EnsureAccount(EnsureAccountRequest) returns (EnsureAccountResponse);
 
-  // Drive the whatsmeow.Client lifecycle: open WebSocket, drive QR loop if
-  // unpaired, transition to CONNECTED on PairSuccess. Idempotent.
+  // 驱动 whatsmeow.Client 生命周期：打开 WebSocket，如果是
+  // 未配对状态则驱动 QR 循环，在 PairSuccess 时转换到 CONNECTED 状态。幂等。
   rpc Connect(ConnectRequest) returns (ConnectResponse);
 
-  // Close the WebSocket but keep the device credentials.
+  // 关闭 WebSocket 但保留设备凭据。
   rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
 
-  // Wipe device credentials. Account must re-pair via QR after this.
+  // 清除设备凭据。此后账号必须通过 QR 重新配对。
   rpc Logout(LogoutRequest) returns (LogoutResponse);
 
-  // Send a message. The client_msg_id field provides idempotency; if a
-  // request with the same (account_key, client_msg_id) was acknowledged in
-  // the dedup window, the cached response is returned without resending.
+  // 发送消息。client_msg_id 字段提供幂等性；如果具有相同
+  // (account_key, client_msg_id) 的请求在去重窗口内已被确认，
+  // 则返回缓存的响应而不重新发送。
   rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
 
-  // Single long-lived server-stream carrying ALL events for ALL accounts on
-  // this sidecar. Python opens exactly one StreamEvents call per sidecar.
-  // Events from different accounts are multiplexed; consumers route by
-  // account_key.
+  // 单个长连接服务端流，承载此 sidecar 上所有账号的所有事件。
+  // Python 为每个 sidecar 打开一个 StreamEvents 调用。
+  // 来自不同账号的事件被多路复用；消费者通过 account_key 进行路由。
   //
-  // Ordering: events for a given (account_key, chat_jid) pair are emitted in
-  // monotonically-increasing seq order. Cross-chat ordering is not guaranteed.
+  // 顺序：给定 (account_key, chat_jid) 对的事件按单调递增的 seq 顺序发出。
+  // 不保证跨聊天顺序。
   rpc StreamEvents(StreamEventsRequest) returns (stream StreamEventsResponse);
 
-  // Request graceful shutdown. The sidecar will:
-  //   1. Stop accepting new RPCs.
-  //   2. Disconnect all clients cleanly.
-  //   3. Flush event stream.
-  //   4. Exit with code 0.
+  // 请求优雅停机。sidecar 将：
+  //   1. 停止接受新的 RPC。
+  //   2. 干净地断开所有客户端连接。
+  //   3. 刷新事件流。
+  //   4. 以代码 0 退出。
   rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Health
+// Health (健康检查)
 // ─────────────────────────────────────────────────────────────────────────────
 
 message PingRequest {
-  // Python supervisor's protocol version. Sidecar rejects mismatches.
+  // Python supervisor 的协议版本。Sidecar 会拒绝版本不匹配的请求。
   uint32 client_protocol_version = 1;
 }
 
 message PingResponse {
   uint32 server_protocol_version = 1;
-  string sidecar_version = 2;       // human-readable, e.g. "0.1.0"
-  string whatsmeow_version = 3;     // upstream library version pinned at build
-  string sidecar_id = 4;            // "default" in single mode
+  string sidecar_version = 2;       // 人类可读版本，例如 "0.1.0"
+  string whatsmeow_version = 3;     // 构建时固定的上游库版本
+  string sidecar_id = 4;            // 单机模式下为 "default"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Account state (shared)
+// Account state (shared) (账号状态 - 共享)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Connection lifecycle of a single account inside the sidecar. Returned from
-// every account-management RPC so the caller always gets the authoritative
-// post-call state.
+// sidecar 内部单个账号的连接生命周期。从每个账号管理 RPC 返回，
+// 以便调用者始终获得权威的调用后状态。
 message AccountState {
   enum State {
     STATE_UNSPECIFIED = 0;
-    STATE_UNPAIRED = 1;       // no device credentials, needs QR
-    STATE_PAIRING = 2;        // QR generated, awaiting scan
-    STATE_CONNECTING = 3;     // websocket opening
-    STATE_CONNECTED = 4;      // online and receiving
-    STATE_DISCONNECTED = 5;   // intentionally offline, credentials retained
-    STATE_LOGGED_OUT = 6;     // credentials wiped
-    STATE_RECOVERING = 7;     // sidecar restarted, re-establishing
+    STATE_UNPAIRED = 1;       // 无设备凭据，需要 QR
+    STATE_PAIRING = 2;        // QR 已生成，等待扫描
+    STATE_CONNECTING = 3;     // WebSocket 开启中
+    STATE_CONNECTED = 4;      // 在线并接收中
+    STATE_DISCONNECTED = 5;   // 有意离线，保留凭据
+    STATE_LOGGED_OUT = 6;     // 凭据已清除
+    STATE_RECOVERING = 7;     // Sidecar 重启，正在重新建立连接
   }
 
   string account_key = 1;
-  string jid = 2;            // empty if not yet paired
+  string jid = 2;            // 如果尚未配对则为空
   State state = 3;
 
-  // Reason for the current state, especially useful for STATE_DISCONNECTED.
-  // Free-form, debug-only. Not part of the stable contract for parsing.
+  // 当前状态的原因，对于 STATE_DISCONNECTED 特别有用。
+  // 自由格式，仅用于调试。不是用于解析的稳定合约的一部分。
   string reason = 4;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Account RPCs
+// Account RPCs (账号 RPC)
 // ─────────────────────────────────────────────────────────────────────────────
 
 message EnsureAccountRequest {
-  // Python-defined stable identifier (e.g. "sales", "bot-017"). Primary key
-  // on the Python side. Maps 1:1 to a whatsmeow Device row.
+  // Python 定义的稳定标识符（例如 "sales", "bot-017"）。
+  // Python 端的主键。与 whatsmeow Device 行 1:1 映射。
   string account_key = 1;
 
-  // Optional human-readable name. Persisted into manifest.json by Python.
+  // 可选的人类可读名称。由 Python 持久化到 manifest.json 中。
   string display_name = 2;
 
-  // Optional. The WhatsApp JID this account_key was previously paired to,
-  // sourced from the Python supervisor's manifest.json (the single source
-  // of truth for account_key -> jid mapping; the sidecar deliberately
-  // does NOT maintain this mapping).
+  // 可选。此 账号 / account_key 之前配对到的 WhatsApp JID，
+  // 来源于 Python supervisor 的 manifest.json（这是 账号 / account_key -> JID 映射的唯一事实来源；
+  // sidecar 刻意不维护此映射）。
   //
-  //   - empty: sidecar allocates a fresh, unpaired device. Caller must
-  //     follow up with Connect to drive QR pairing.
-  //   - non-empty: sidecar loads the persisted device for this jid. If
-  //     the device row is missing the call fails with FAILED_PRECONDITION
-  //     (manifest/db drift requires explicit recovery, not silent
-  //     re-pairing).
+  //   - 为空：sidecar 分配一个新的、未配对的设备。
+  //     调用者必须接着调用 Connect 以驱动 QR 配对。
+  //   - 不为空：sidecar 为此 JID 加载持久化的设备。
+  //     如果缺少设备行，则调用失败并返回 FAILED_PRECONDITION
+  //     （manifest/数据库漂移需要显式恢复，而不是静默重新配对）。
   string jid = 3;
 }
 
 message EnsureAccountResponse {
   AccountState state = 1;
-  bool created = 2;          // true if a new Device row was just inserted
+  bool created = 2;          // 如果刚刚插入了新的 Device 行，则为 true
 }
 
 message ConnectRequest {
@@ -174,22 +168,22 @@ message LogoutResponse {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sending
+// Sending (发送)
 // ─────────────────────────────────────────────────────────────────────────────
 
 message SendMessageRequest {
   string account_key = 1;
   string to_jid = 2;
 
-  // Idempotency key. Required. Python generates this (e.g. UUID or
-  // deterministic hash). The sidecar dedups on (account_key, client_msg_id)
-  // within an in-memory window (Phase 1: 5 minutes, 10k entries LRU).
+  // 幂等键。必填。由 Python 生成（例如 UUID 或确定性哈希）。
+  // Sidecar 在内存窗口内对 (account_key, client_msg_id) 进行去重
+  // （Phase 1：5 分钟，10k 条目 LRU）。
   string client_msg_id = 3;
 
-  // Phase 1: text only. Future media bodies will live in numbers 11..19.
+  // Phase 1：仅文本。未来的媒体主体将使用编号 11..19。
   TextBody text = 10;
 
-  // Reserve numbers for the future media types so we never break the wire.
+  // 为未来的媒体类型保留编号，以免破坏协议。
   reserved 11 to 19;
   reserved "image", "audio", "video", "document", "reaction", "edit", "revoke";
 }
@@ -197,47 +191,45 @@ message SendMessageRequest {
 message TextBody {
   string body = 1;
 
-  // Optional reply-to. The referenced message_id must be one we've previously
-  // observed (sent or received) for the same account.
+  // 可选的回复目标。引用的 message_id 必须是我们之前观察到的
+  // （发送或接收的）属于同一账号的消息。
   string reply_to_message_id = 2;
 }
 
 message SendMessageResponse {
-  // Server-assigned WhatsApp message id. Stable across retries within the
-  // dedup window.
+  // 服务端分配的 WhatsApp 消息 id。在去重窗口内的重试中保持稳定。
   string message_id = 1;
 
-  // Server timestamp from WhatsApp.
+  // 来自 WhatsApp 的服务端时间戳。
   google.protobuf.Timestamp server_timestamp = 2;
 
-  // True if this response was served from the dedup cache (i.e. the same
-  // client_msg_id was seen before and we did NOT resend).
+  // 如果此响应是从去重缓存中提供的（即之前看到过相同的 client_msg_id
+  // 且我们没有重新发送），则为 true。
   bool deduped = 3;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Event stream
+// Event stream (事件流)
 // ─────────────────────────────────────────────────────────────────────────────
 
 message StreamEventsRequest {
-  // If true, include high-volume low-value events (presence, receipts beyond
-  // the ones tied to outbound sends, sync noise). Default false. Phase 1
-  // does not implement these even when true; the flag exists for forward
-  // compat.
+  // 如果为 true，则包含高频低价值事件（在线状态、除绑定到外发发送之外的回执、
+  // 同步噪点）。默认为 false。Phase 1 即使设为 true 也不会实现这些；
+  // 该标志的存在是为了前向兼容。
   bool include_soft_events = 1;
 
-  // Optional resume cursor. Phase 1 ignores this (sidecar has no event
-  // persistence; on reconnect Python replays state via Connect).
+  // 可选的恢复游标。Phase 1 会忽略此项（sidecar 没有事件持久化；
+  // 重连时 Python 通过 Connect 重新同步状态）。
   uint64 resume_after_seq = 2;
 }
 
-// Wrapper carrying routing metadata + the event payload. seq is monotonic
-// across the entire sidecar lifetime (resets on sidecar restart).
+// 承载路由元数据 + 事件负载的包装器。seq 在整个 sidecar 生命周期内
+// 是单调递增的（在 sidecar 重启时重置）。
 message StreamEventsResponse {
   uint64 seq = 1;
-  string sidecar_id = 2;       // "default" in single mode
+  string sidecar_id = 2;       // 单机模式下为 "default"
   string account_key = 3;
-  string account_jid = 4;       // empty if account not yet paired
+  string account_jid = 4;       // 如果账号尚未配对则为空
   google.protobuf.Timestamp observed_at = 5;
 
   oneof event {
@@ -250,31 +242,31 @@ message StreamEventsResponse {
     UnknownEvent unknown = 99;
   }
 
-  // Reserved for future event variants.
+  // 为未来的事件变体保留。
   reserved 16 to 98;
 }
 
 message ConnectedEvent {}
 
 message DisconnectedEvent {
-  string reason = 1;            // free-form debug string
+  string reason = 1;            // 自由格式调试字符串
 }
 
-// Emitted while pairing. The same QR string is re-emitted on rotation
-// (whatsmeow rotates ~every 20 seconds). Python should render the latest.
+// 在配对过程中发出。相同的 QR 字符串会在轮换时重新发出
+// （whatsmeow 大约每 20 秒轮换一次）。Python 应该渲染最新的一个。
 message QREvent {
-  string code = 1;              // raw QR payload, render via qrcode lib
-  uint32 ttl_seconds = 2;       // remaining validity for this code
+  string code = 1;              // 原始 QR 负载，通过 qrcode 库渲染
+  uint32 ttl_seconds = 2;       // 此代码的剩余有效期
 }
 
 message PairSuccessEvent {
   string jid = 1;
   string business_name = 2;
-  string platform = 3;          // "android", "ios", etc.
+  string platform = 3;          // "android", "ios" 等。
 }
 
 message LoggedOutEvent {
-  string reason = 1;            // e.g. "phone_unlinked", "banned"
+  string reason = 1;            // 例如 "phone_unlinked", "banned"
 }
 
 message MessageEvent {
@@ -285,32 +277,32 @@ message MessageEvent {
   google.protobuf.Timestamp timestamp = 5;
   bool is_group = 6;
 
-  // Phase 1: text-only. Future media variants will be added as additional
-  // fields (a oneof would break wire compat with Phase 1 messages).
+  // Phase 1：仅文本。未来的媒体变体将作为附加字段添加
+  // （oneof 会破坏与 Phase 1 消息的 wire 兼容性）。
   string text = 10;
 
-  // Reply context: the message_id this is a reply to. Empty if not a reply.
+  // 回复上下文：此消息所回复的 message_id。如果不是回复则为空。
   string reply_to_message_id = 11;
 
-  // Reserved for future media payloads.
+  // 为未来的媒体负载保留。
   reserved 12 to 29;
   reserved "image", "audio", "video", "document", "sticker";
 }
 
-// Catch-all for whatsmeow events the adapter doesn't yet translate. Carries
-// the Go type name for debugging. Python surfaces these as UnknownEvent
-// (not delivered to user handlers by default).
+// 适配器尚未翻译的 whatsmeow 事件的兜底。
+// 携带用于调试的 Go 类型名称。Python 将这些显示为 UnknownEvent
+// （默认不传递给用户处理程序）。
 message UnknownEvent {
   string go_type = 1;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Lifecycle
+// Lifecycle (生命周期)
 // ─────────────────────────────────────────────────────────────────────────────
 
 message ShutdownRequest {
-  // Grace period in milliseconds. After this elapses, the sidecar exits even
-  // if disconnects haven't all completed.
+  // 以毫秒为单位的优雅期。在此时间过后，即使断开连接尚未全部完成，
+  // sidecar 也会退出。
   uint32 grace_ms = 1;
 }
 

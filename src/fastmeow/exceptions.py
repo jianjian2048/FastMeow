@@ -1,146 +1,139 @@
-"""Public exception hierarchy for FastMeow.
+"""FastMeow 的公开异常层级。
 
-All FastMeow errors derive from :class:`FastMeowError`. Catching that one
-type is sufficient to handle every library-raised exception.
+所有 FastMeow 错误均派生自 :class:`FastMeowError`。
+捕获这一个类型就足以处理库抛出的所有异常。
 """
 
 from __future__ import annotations
 
 
 class FastMeowError(Exception):
-    """Base class for every FastMeow-raised exception."""
+    """所有 FastMeow 抛出的异常的基类。"""
 
 
 # ---------------------------------------------------------------------------
-# Configuration / setup
+# 配置 / 启动
 # ---------------------------------------------------------------------------
 
 
 class ConfigurationError(FastMeowError):
-    """Raised when an :class:`fastmeow.FastMeow` app is misconfigured.
+    """当 :class:`fastmeow.FastMeow` 应用配置错误时抛出。
 
-    Examples: duplicate ``account_key``, missing required argument,
-    invalid ``on_qr`` selector.
+    示例：重复的 ``account_key``、缺少必需参数、无效的 ``on_qr`` 选择器。
     """
 
 
 class SidecarBinaryNotFoundError(FastMeowError):
-    """Raised when the bundled Go sidecar binary cannot be located.
+    """当找不到内置的 Go sidecar 二进制文件时抛出。
 
-    The wheel ships ``fastmeow/_bin/<os>-<arch>/fastmeow-sidecar(.exe)``.
-    In dev mode we fall back to ``./bin/fastmeow-sidecar(.exe)`` relative
-    to the project root.
+    Wheel 包中包含 ``fastmeow/_bin/<os>-<arch>/fastmeow-sidecar(.exe)``。
+    在开发模式下，我们会回退到相对于项目根目录的 ``./bin/fastmeow-sidecar(.exe)``。
     """
 
 
 class ManifestError(ConfigurationError):
-    """Raised when the on-disk account manifest is corrupt, locked by
-    another process, or drifts from the sidecar's session store.
+    """当磁盘上的账号 manifest 清单损坏、被另一个进程锁定或与 sidecar 的会话存储不一致时抛出。
 
-    Subclass of :class:`ConfigurationError` because every cause is a
-    setup-time / persistent-state issue, not a transient runtime fault.
+    是 :class:`ConfigurationError` 的子类，因为所有诱因都是安装时或持久化状态问题，而非瞬时的运行时故障。
     """
 
 
 # ---------------------------------------------------------------------------
-# Sidecar lifecycle
+# sidecar 生命周期
 # ---------------------------------------------------------------------------
 
 
 class SidecarError(FastMeowError):
-    """Base class for sidecar process / transport failures."""
+    """sidecar 进程 / 传输失败的基类。"""
 
 
 class SidecarStartupError(SidecarError):
-    """Sidecar process exited or refused connections during startup."""
+    """sidecar 进程在启动期间退出或拒绝连接。"""
 
 
 class SidecarCrashedError(SidecarError):
-    """Sidecar process died unexpectedly while running."""
+    """sidecar 进程在运行期间意外终止。"""
 
 
 class TransportError(SidecarError):
-    """gRPC channel / stream level failure."""
+    """gRPC 通道 / 流层面的失败。"""
 
 
 # ---------------------------------------------------------------------------
-# Account / pairing
+# 账号 / 配对
 # ---------------------------------------------------------------------------
 
 
 class AccountError(FastMeowError):
-    """Base class for account-management failures."""
+    """账号管理失败的基类。"""
 
 
 class AccountAlreadyExistsError(AccountError):
-    """Raised when ``add_account`` is called twice with the same key."""
+    """当使用相同的 key 两次调用 ``add_account`` 时抛出。"""
 
 
 class AccountNotFoundError(AccountError):
-    """Raised when an operation references an unknown ``account_key``."""
+    """当操作引用了未知的 ``account_key`` 时抛出。"""
 
 
 class PairingTimeoutError(AccountError):
-    """User did not scan the QR within the configured timeout."""
+    """用户未在配置的超时时间内扫描二维码。"""
 
 
 class PairingFailedError(AccountError):
-    """WhatsApp rejected pairing (typically QR expired or device limit)."""
+    """WhatsApp 拒绝配对（通常是二维码过期或达到设备限制）。"""
 
 
 # ---------------------------------------------------------------------------
-# Messaging
+# 消息发送
 # ---------------------------------------------------------------------------
 
 
 class MessagingError(FastMeowError):
-    """Base class for outbound-message failures."""
+    """外发消息失败的基类。"""
 
 
 class InvalidJIDError(MessagingError):
-    """Provided JID could not be parsed or is for an unsupported server."""
+    """提供的 JID 无法解析或属于不受支持的服务器。"""
 
 
 class MessageSendError(MessagingError):
-    """Sidecar refused to deliver an outbound message."""
+    """sidecar 拒绝交付外发消息。"""
 
 
 # ---------------------------------------------------------------------------
-# Handler dispatch
+# 处理器派发
 # ---------------------------------------------------------------------------
 
 
 class DispatchError(FastMeowError):
-    """Base class for handler-registration / dispatch failures."""
+    """处理器注册 / 派发失败的基类。"""
 
 
 class HandlerSignatureError(DispatchError):
-    """Handler declared a parameter FastMeow cannot inject.
+    """处理器声明了 FastMeow 无法注入的参数。
 
-    Phase 1 supports the parameter names / annotations: ``msg`` / ``event``
-    (any concrete event class), ``ctx`` (:class:`fastmeow.Ctx`), ``qr``
-    (:class:`fastmeow.QREvent`), and ``match`` (regex match object,
-    ``None`` outside regex filters). Unknown parameters fail fast.
+    Phase 1 支持的参数名称 / 注解包括：``msg`` / ``event``（任何具体的事件类）、
+    ``ctx`` (:class:`fastmeow.Ctx`)、``qr`` (:class:`fastmeow.QREvent`) 以及
+    ``match``（正则匹配对象，在正则过滤器外为 ``None``）。
+    未知的参数会导致注册立即失败。
     """
 
 
 class ReplyNotAvailableError(DispatchError):
-    """``ctx.reply`` was accessed outside a :class:`MessageEvent` handler.
+    """在 :class:`MessageEvent` 处理器之外访问了 ``ctx.reply``。
 
-    ``reply`` is a convenience that auto-targets the inbound chat. Other
-    event types (Connected, Disconnected, QR, ...) have no inbound chat,
-    so ``reply`` is intentionally unavailable. Use
-    ``ctx.client.send_text(jid, text)`` instead.
+    ``reply`` 是一个自动定位到入站聊天的便捷方法。
+    其他事件类型（Connected, Disconnected, QR 等）没有入站聊天，
+    因此 ``reply`` 被刻意设计为不可用。请改用 ``ctx.client.send_text(jid, text)``。
     """
 
 
 class BackpressureError(DispatchError):
-    """Raised when a per-account event queue overflows.
+    """当单个账号的事件队列溢出时抛出。
 
-    In 0.1.0 every streamed event is critical (message, qr, pair_success,
-    connected, disconnected, logged_out), so silent drop-oldest would
-    desynchronize user state. The dispatcher fails fast instead: it logs
-    loudly, sets the global stop flag, and raises this on the affected
-    path so the application stops visibly. Selective shedding may return
-    once soft-event classes exist.
+    在 0.1.0 版本中，每个流式事件都是关键的（message, qr, pair_success,
+    connected, disconnected, logged_out），因此静默丢弃旧事件会导致用户状态脱节。
+    派发器改为采取尽早失败策略：它会记录详细日志、设置全局停止标志，
+    并在受影响的路径上抛出此异常，使应用显式停止。一旦引入非关键事件类，可能会恢复选择性丢弃机制。
     """

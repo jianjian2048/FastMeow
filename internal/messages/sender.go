@@ -1,32 +1,29 @@
-// Package messages implements the outbound side of the gateway: SendText
-// for now, with hooks for media types in subsequent milestones. It owns
-// the (account_key, client_msg_id) dedup cache that lets the Python SDK
-// safely retry a SendMessage RPC across transient transport failures
-// without risking double-delivery on WhatsApp.
+// Package messages 实现了网关的出站侧：目前仅支持 SendText，
+// 后续里程碑将加入对媒体类型的支持。它维护着一个
+// (account_key, client_msg_id) 去重缓存，让 Python SDK
+// 在遇到瞬时传输故障时可以安全地重试 SendMessage RPC，
+// 而不会在 WhatsApp 上产生重复投递的风险。
 //
-// Dedup semantics
+// 去重语义
 //
-// Phase 1 cache:
-//   - Key: "<account_key>\x00<client_msg_id>" (NUL-separated to keep
-//     account_key and client_msg_id from colliding when they happen to
-//     concatenate to the same string).
-//   - Value: the successful SendMessageResponse.
-//   - Capacity: 10_000 entries, evicted LRU.
-//   - TTL: 5 minutes per entry; expired entries are treated as cache
-//     misses and re-sent.
+// 第一阶段缓存：
+//   - Key: "<account_key>\x00<client_msg_id>"（使用 NUL 分隔，
+//     以防止 account_key 和 client_msg_id 在拼接成相同字符串时
+//     发生碰撞）。
+//   - Value: 成功的 SendMessageResponse。
+//   - Capacity: 10,000 个条目，采用 LRU 淘汰策略。
+//   - TTL: 每个条目 5 分钟；过期的条目被视为缓存未命中并进行重发。
 //
-// Cache scope:
-//   - Process-local. A sidecar restart loses the cache; that is
-//     acceptable in Phase 1 because Python persists nothing about
-//     in-flight sends across crashes either, and a fresh sidecar will
-//     re-deliver at most once per Python retry.
-//   - Only successful sends are cached. Failed sends are NOT cached so
-//     Python's retry actually retries.
+// 缓存范围：
+//   - 进程内。sidecar 重启会丢失缓存；在第一阶段这是可以
+//     接受的，因为 Python 在崩溃时也不会持久化任何正在发送的消息，
+//     且新的 sidecar 在 Python 重试时最多只会重新投递一次。
+//   - 仅缓存成功的发送。失败的发送不被缓存，以便 Python
+//     的重试能够真正生效。
 //
-// We deliberately do NOT cache by message body hash. client_msg_id is
-// the only correctness-bearing key — body-hash dedup would silently
-// suppress legitimate re-sends of identical content (e.g. an automated
-// hourly "OK" reply).
+// 我们特意不根据消息体哈希进行缓存。client_msg_id 是
+// 保证正确性的唯一键 —— 基于消息体哈希的去重会静默地
+// 抑制内容相同的合法重发（例如自动化的每小时 "OK" 回复）。
 package messages
 
 import (
@@ -46,14 +43,14 @@ import (
 	pb "github.com/jianjian2048/fastmeow/gen/go/fastmeow/v1"
 )
 
-// Defaults match the values documented in the proto file.
+// 默认值与 proto 文件中记录的值一致。
 const (
 	DefaultDedupCapacity = 10_000
 	DefaultDedupTTL      = 5 * time.Minute
 )
 
-// Errors surfaced to gRPC handlers. Wrap with status.Error in the server
-// layer to map onto gRPC codes.
+// 暴露给 gRPC 处理程序的错误。在服务端层使用 status.Error
+// 进行封装以映射到 gRPC 状态码。
 var (
 	ErrEmptyClientMsgID = errors.New("messages: client_msg_id is required")
 	ErrEmptyToJID       = errors.New("messages: to_jid is required")
@@ -61,13 +58,13 @@ var (
 	ErrInvalidJID       = errors.New("messages: invalid jid")
 )
 
-// Sender is the entry point for outbound messages. One instance per
-// sidecar; safe for concurrent use across all accounts (whatsmeow.Client
-// itself serialises sends per-account internally).
+// Sender 是出站消息的入口点。每个 sidecar 一个实例；
+// 在所有账号之间并发使用是安全的（whatsmeow.Client
+// 自身在内部会按账号对发送进行串行化）。
 type Sender struct {
 	dedup *lru.Cache[string, dedupEntry]
 	ttl   time.Duration
-	now   func() time.Time // overridable for tests
+	now   func() time.Time // 可在测试中重写
 }
 
 type dedupEntry struct {
@@ -75,8 +72,8 @@ type dedupEntry struct {
 	cachedAt time.Time
 }
 
-// NewSender constructs a Sender with the default dedup capacity and TTL.
-// Pass capacity<=0 / ttl<=0 to use the defaults.
+// NewSender 使用默认的去重容量和 TTL 构造一个 Sender。
+// 传入 capacity<=0 / ttl<=0 将使用默认值。
 func NewSender(capacity int, ttl time.Duration) (*Sender, error) {
 	if capacity <= 0 {
 		capacity = DefaultDedupCapacity
@@ -95,14 +92,13 @@ func NewSender(capacity int, ttl time.Duration) (*Sender, error) {
 	}, nil
 }
 
-// SendText sends a plain-text message via cli to the given recipient.
-// The (accountKey, clientMsgID) tuple keys the dedup cache. If a fresh
-// successful send for the same tuple is in cache, the cached response
-// is returned with deduped=true and the WhatsApp send is skipped.
+// SendText 通过 cli 向给定接收者发送纯文本消息。
+// (accountKey, clientMsgID) 元组用作去重缓存的键。如果缓存中
+// 存在该元组的新鲜成功发送记录，则返回缓存的响应，并将
+// deduped 设置为 true，且跳过 WhatsApp 发送。
 //
-// accountKey is purely for cache scoping; it is NOT validated against
-// the cli passed in. Caller (the gRPC server) is responsible for
-// supplying matching values.
+// accountKey 纯粹用于缓存范围限定；它不会根据传入的
+// cli 进行校验。调用方（gRPC 服务端）负责提供匹配的值。
 func (s *Sender) SendText(
 	ctx context.Context,
 	cli *whatsmeow.Client,
@@ -125,18 +121,18 @@ func (s *Sender) SendText(
 		return nil, ErrEmptyBody
 	}
 
-	// Dedup cache check.
+	// 去重缓存检查。
 	key := dedupKey(accountKey, clientMsgID)
 	if cached, ok := s.dedup.Get(key); ok {
 		if s.now().Sub(cached.cachedAt) <= s.ttl {
-			// Clone so callers can mutate without poisoning the cache,
-			// and re-stamp deduped=true even if the cached entry was
-			// originally returned with false (it always is).
+			// 克隆对象以便调用方在不污染缓存的情况下进行修改，
+			// 并重新标记 deduped=true，即使缓存的条目原本
+			// 返回的是 false（它总是 false）。
 			out := proto.Clone(cached.resp).(*pb.SendMessageResponse)
 			out.Deduped = true
 			return out, nil
 		}
-		// Expired; remove and fall through to a real send.
+		// 已过期；移除并继续执行真实发送。
 		s.dedup.Remove(key)
 	}
 
@@ -147,11 +143,11 @@ func (s *Sender) SendText(
 
 	msg := buildTextMessage(body, replyToMessageID)
 
-	// We pass clientMsgID through to whatsmeow as the message ID. This
-	// gives us end-to-end idempotency: even if two sidecars in a future
-	// HA setup both saw the same retry, WhatsApp's own dedup would
-	// collapse them. Using a UUID-shaped clientMsgID is recommended;
-	// whatsmeow accepts any non-empty string here.
+	// 我们将 clientMsgID 作为消息 ID 传递给 whatsmeow。
+	// 这赋予了我们端到端的幂等性：即使在未来的高可用架构中，
+	// 两个 sidecar 都看到了相同的重试，WhatsApp 自身的去重
+	// 也会合并它们。建议使用 UUID 形式的 clientMsgID；
+	// whatsmeow 在此处接受任何非空字符串。
 	extra := whatsmeow.SendRequestExtra{ID: types.MessageID(clientMsgID)}
 
 	resp, err := cli.SendMessage(ctx, jid, msg, extra)
@@ -169,10 +165,10 @@ func (s *Sender) SendText(
 	return out, nil
 }
 
-// buildTextMessage constructs a whatsmeow text-only payload. If replyTo
-// is non-empty we wrap it in ExtendedTextMessage to carry the reply
-// reference, otherwise the simpler Conversation field is enough. Both
-// shapes render identically on the receiver side.
+// buildTextMessage 构造一个 whatsmeow 纯文本负载。如果 replyTo
+// 非空，我们将其封装在 ExtendedTextMessage 中以携带回复引用，
+// 否则简单的 Conversation 字段就足够了。这两种形式在接收端
+// 渲染效果相同。
 func buildTextMessage(body, replyTo string) *waE2E.Message {
 	if replyTo == "" {
 		return &waE2E.Message{Conversation: proto.String(body)}
@@ -187,8 +183,7 @@ func buildTextMessage(body, replyTo string) *waE2E.Message {
 	}
 }
 
-// dedupKey composes the cache key. See package comment for why we use
-// NUL-separation.
+// dedupKey 组合缓存键。参见包说明以了解为何使用 NUL 分隔。
 func dedupKey(accountKey, clientMsgID string) string {
 	var b strings.Builder
 	b.Grow(len(accountKey) + 1 + len(clientMsgID))

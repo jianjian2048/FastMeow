@@ -1,6 +1,6 @@
-"""Top-level :class:`FastMeow` application.
+"""顶层 :class:`FastMeow` 应用。
 
-This is the public entry point most user code touches::
+这是大多数用户代码接触的公开入口点：:
 
     from fastmeow import FastMeow, Router
 
@@ -19,22 +19,19 @@ This is the public entry point most user code touches::
             await handle.ready()
             await app.run_forever()
 
-The ``FastMeow`` object owns three collaborators:
+``FastMeow`` 对象拥有三个协作组件：
 
-* :class:`fastmeow._supervisor.Sidecar`  -- the Go subprocess
-* :class:`fastmeow._transport.Transport` -- gRPC client
-* :class:`fastmeow._dispatcher.Dispatcher` -- pumps events into the router
+* :class:`fastmeow._supervisor.Sidecar`  -- Go 子进程
+* :class:`fastmeow._transport.Transport` -- gRPC 客户端
+* :class:`fastmeow._dispatcher.Dispatcher` -- 将事件泵入路由器
 
-It also owns the :class:`fastmeow.manifest.Manifest` so account keys
-survive restarts.
+它还拥有 :class:`fastmeow.manifest.Manifest`，以便账号 key 在重启后依然存在。
 
-``add_account`` is **synchronous-returning, async-completing**: it
-returns an :class:`AccountHandle` *synchronously* (no ``await`` needed)
-so the user can attach QR callbacks before the device even starts
-pairing, then awaits ``handle.ready()`` to block until the account
-reaches CONNECTED (or fails). The actual ``EnsureAccount`` / ``Connect``
-gRPC round-trips run in a background task owned by :class:`FastMeow`;
-their failures are surfaced through :meth:`AccountHandle.ready`.
+``add_account`` 是**同步返回，异步完成**的：它*同步*返回一个 :class:`AccountHandle`
+（无需 ``await``），以便用户可以在设备开始配对之前附加 QR 回调，
+然后 await ``handle.ready()`` 以阻塞直到账号达到 CONNECTED 状态（或失败）。
+实际的 ``EnsureAccount`` / ``Connect`` gRPC 往返在由 :class:`FastMeow` 拥有的后台任务中运行；
+它们的失败通过 :meth:`AccountHandle.ready` 暴露。
 """
 
 from __future__ import annotations
@@ -80,13 +77,11 @@ QRCallback = Callable[[QREvent], Awaitable[None]] | Callable[[QREvent], None]
 
 
 class AccountHandle:
-    """Returned synchronously by :meth:`FastMeow.add_account`.
+    """由 :meth:`FastMeow.add_account` 同步返回。
 
-    Lets user code await pairing/connection completion, attach extra QR
-    listeners, or query the current state without re-doing a lookup.
+    允许用户代码等待配对/连接完成、附加额外的 QR 监听器，或在不重新查找的情况下查询当前状态。
 
-    The handle is event-driven: :class:`FastMeow` notifies it whenever
-    the dispatcher sees an event for ``account_key``.
+    此句柄是事件驱动的：每当派发器看到 ``account_key`` 的事件时，:class:`FastMeow` 都会通知它。
     """
 
     def __init__(self, account_key: str) -> None:
@@ -97,7 +92,7 @@ class AccountHandle:
         self._terminal_failure: BaseException | None = None
         self._qr_subscribers: list[QRCallback] = []
 
-    # -- public API --------------------------------------------------------
+    # -- 公开 API --------------------------------------------------------
 
     @property
     def state(self) -> AccountState:
@@ -108,17 +103,15 @@ class AccountHandle:
         return self._jid
 
     def on_qr(self, callback: QRCallback) -> None:
-        """Register an extra QR observer in addition to the one passed
-        to :meth:`FastMeow.add_account`."""
+        """除了传递给 :meth:`FastMeow.add_account` 的观察器外，再注册一个额外的 QR 观察器。"""
         self._qr_subscribers.append(callback)
 
     async def ready(self, timeout: float | None = None) -> None:
-        """Block until the account reaches CONNECTED.
+        """阻塞直到账号达到 CONNECTED 状态。
 
         Raises:
-            PairingTimeoutError: if ``timeout`` elapses first.
-            PairingFailedError: if the account ends up LOGGED_OUT or
-                otherwise failed before connecting.
+            PairingTimeoutError: 如果 ``timeout`` 首先超时。
+            PairingFailedError: 如果账号最终处于 LOGGED_OUT 状态或在连接前失败。
         """
         if self._connected.is_set():
             if self._terminal_failure is not None:
@@ -133,22 +126,20 @@ class AccountHandle:
         if self._terminal_failure is not None:
             raise self._terminal_failure
 
-    # -- internal: state machine ------------------------------------------
+    # -- 内部：状态机 ------------------------------------------
 
-    # Terminal states never leave themselves; CONNECTED only yields to a
-    # later DISCONNECTED/LOGGED_OUT (auto-reconnect or remote logout).
+    # 终态永远不会离开；CONNECTED 仅会转为随后的 DISCONNECTED/LOGGED_OUT（自动重连或远程登出）。
     _TERMINAL_STATES: frozenset[AccountState] = frozenset({AccountState.LOGGED_OUT})
 
     def _apply_state(self, state: AccountState, jid: str = "") -> None:
-        """Idempotent state transition used by both RPC results and events.
+        """RPC 结果和事件共同使用的幂等状态转换。
 
-        Rules:
-          * Never leave a terminal state (currently only LOGGED_OUT).
-          * Never downgrade CONNECTED back to PAIRING / CONNECTING.
-          * Setting state == CONNECTED wakes any :meth:`ready` awaiter.
-          * Setting state == LOGGED_OUT marks a terminal failure AND wakes
-            awaiters so they can observe the exception.
-          * ``jid`` is only adopted when non-empty.
+        规则：
+          * 永远不离开终态（目前仅有 LOGGED_OUT）。
+          * 永远不将 CONNECTED 降级回 PAIRING / CONNECTING。
+          * 设置 state == CONNECTED 会唤醒任何 :meth:`ready` 等待者。
+          * 设置 state == LOGGED_OUT 会标记致命失败，并唤醒等待者以便其观察异常。
+          * 仅当 ``jid`` 非空时才采用它。
         """
         if self._state in self._TERMINAL_STATES:
             return
@@ -174,26 +165,24 @@ class AccountHandle:
             self._connected.set()
 
     def _fail(self, exc: BaseException) -> None:
-        """Mark the handle as failed and unblock :meth:`ready`."""
+        """将句柄标记为失败并取消 :meth:`ready` 的阻塞。"""
         if self._terminal_failure is None:
             self._terminal_failure = exc
         self._connected.set()
 
-    # -- internal: called by FastMeow event hook --------------------------
+    # -- 内部：由 FastMeow 事件钩子调用 --------------------------
 
     async def _on_event(self, event: object) -> None:
         if isinstance(event, ConnectedEvent):
             self._apply_state(AccountState.CONNECTED, jid=event.account_jid)
         elif isinstance(event, DisconnectedEvent):
-            # Don't wake ready(): a paired account that drops will normally
-            # auto-reconnect and emit ConnectedEvent again. Pre-pair drops
-            # are uninteresting (QR retries continue).
+            # 不要唤醒 ready()：断开连接的已配对账号通常会自动重连并再次发出 ConnectedEvent。
+            # 配对前的断开无需关注（QR 重试将继续）。
             if self._state is AccountState.CONNECTED:
                 self._state = AccountState.DISCONNECTED
         elif isinstance(event, PairSuccessEvent):
-            # JID persistence is handled at FastMeow layer (manifest).
-            # Here we only update the handle's view; state stays PAIRING
-            # until the subsequent ConnectedEvent.
+            # JID 持久化在 FastMeow 层处理（manifest）。
+            # 此处仅更新句柄的视图；状态保持为 PAIRING，直到随后的 ConnectedEvent。
             if event.jid:
                 self._jid = event.jid
         elif isinstance(event, LoggedOutEvent):
@@ -213,20 +202,19 @@ class AccountHandle:
 
 
 # ---------------------------------------------------------------------------
-# FastMeow application
+# FastMeow 应用
 # ---------------------------------------------------------------------------
 
 
 class FastMeow:
-    """Single-process WhatsApp automation app.
+    """单进程 WhatsApp 自动化应用。
 
-    Parameters:
-        session_dir: Directory to store sqlite sessions and manifest.
-        sidecar_config: Override the default supervisor configuration.
-        on_error: Async error hook for handler exceptions; defaults to
-            ``logging.exception``.
+    Args:
+        session_dir: 存储 sqlite 会话和 manifest 的目录。
+        sidecar_config: 覆盖默认的监督器配置。
+        on_error: 处理器异常的异步错误钩子；默认为 ``logging.exception``。
 
-    Use as an async context manager to guarantee subprocess teardown::
+    作为异步上下文管理器使用，以保证子进程的拆除：:
 
         async with FastMeow(session_dir="./sessions") as app:
             ...
@@ -259,17 +247,16 @@ class FastMeow:
         self._started = False
         self._stopped = False
 
-    # -- routing -----------------------------------------------------------
+    # -- 路由 -----------------------------------------------------------
 
     def include_router(self, router: Router) -> None:
-        """Mount a :class:`Router` under the app's root router.
+        """在应用的根路由器下挂载一个 :class:`Router`。
 
-        Forwards to :meth:`Router.include_router` so cycle detection
-        and naming behave identically to user-built routers.
+        转发至 :meth:`Router.include_router`，因此循环检测和命名行为与用户构建的路由器一致。
         """
         self._router.include_router(router)
 
-    # -- async context manager --------------------------------------------
+    # -- 异步上下文管理器 --------------------------------------------
 
     async def __aenter__(self) -> FastMeow:
         await self.start()
@@ -283,16 +270,14 @@ class FastMeow:
     ) -> None:
         await self.stop()
 
-    # -- lifecycle ---------------------------------------------------------
+    # -- 生命周期 ---------------------------------------------------------
 
     async def start(self) -> None:
-        """Spawn the sidecar, open the gRPC channel, start dispatching.
+        """启动 sidecar，打开 gRPC 通道，开始派发。
 
-        Resource acquisition is **all-or-nothing**: if any step raises
-        (sidecar fails to spawn, gRPC handshake times out, dispatcher
-        cannot start) every previously-acquired resource is torn down
-        before the original exception propagates. The instance is left
-        in its pre-:meth:`start` state and may be retried.
+        资源获取是**原子性**的：如果任何步骤抛出异常（sidecar 启动失败、gRPC 握手超时、
+        派发器无法启动），在原始异常传播之前，每个先前获取的资源都会被拆除。
+        实例将保持在其 :meth:`start` 之前的状态，并可以重试。
         """
         if self._started:
             raise RuntimeError("FastMeow already started")
@@ -362,13 +347,12 @@ class FastMeow:
         self._started = True
 
     async def stop(self) -> None:
-        """Cooperatively shut down dispatcher, transport, sidecar."""
+        """协作式地关闭派发器、传输层和 sidecar。"""
         if self._stopped:
             return
         self._stopped = True
 
-        # Cancel any in-flight account bootstrap tasks first so they
-        # don't race against the transport shutting down.
+        # 首先取消任何正在进行的账号引导任务，以免它们与传输层关闭竞争。
         pending = [t for t in self._account_tasks if not t.done()]
         for t in pending:
             t.cancel()
@@ -390,12 +374,12 @@ class FastMeow:
             await self._manifest.close()
 
     async def run_forever(self) -> None:
-        """Block until the dispatcher's stream ends or :meth:`stop` runs."""
+        """阻塞直到派发器流结束或 :meth:`stop` 运行。"""
         if self._dispatcher is None:
             raise RuntimeError("FastMeow not started")
         await self._dispatcher.run_until_stopped()
 
-    # -- account management ------------------------------------------------
+    # -- 账号管理 ------------------------------------------------
 
     def add_account(
         self,
@@ -405,32 +389,26 @@ class FastMeow:
         jid: str | None = None,
         on_qr: QRCallback | Literal["terminal"] | None = None,
     ) -> AccountHandle:
-        """Register and start an account.
+        """注册并启动一个账号。
 
-        **Synchronous return, asynchronous completion.** This call returns
-        an :class:`AccountHandle` immediately, before any gRPC round-trip
-        happens. The handle's :meth:`AccountHandle.ready` blocks until
-        pairing+connect complete (or fail).
+        **同步返回，异步完成。** 此调用立即返回一个 :class:`AccountHandle`，
+        在进行任何 gRPC 往返之前。句柄的 :meth:`AccountHandle.ready` 会阻塞，
+        直到配对和连接完成（或失败）。
 
-        The actual ``EnsureAccount`` / ``Connect`` calls run in a
-        background task owned by this :class:`FastMeow`. Failures during
-        bootstrap are surfaced as exceptions raised from
-        :meth:`AccountHandle.ready`.
+        实际的 ``EnsureAccount`` / ``Connect`` 调用在此 :class:`FastMeow` 拥有的后台任务中运行。
+        引导过程中的失败会作为从 :meth:`AccountHandle.ready` 抛出的异常暴露出来。
 
         Args:
-            account_key: Stable user-chosen id.
-            display_name: Optional WhatsApp display name (new pairings).
-            jid: Pre-existing JID to load. ``None`` means consult the
-                manifest; if the manifest has no entry, create a new
-                device (QR pairing required).
-            on_qr: Either an async/sync callable receiving each
-                :class:`QREvent`, or the literal string ``"terminal"``
-                to use the bundled terminal renderer.
+            account_key: 稳定的用户选择 ID。
+            display_name: 可选的 WhatsApp 显示名称（新配对）。
+            jid: 预先存在的要加载的 JID。``None`` 表示查询 manifest 清单；
+                如果 manifest 清单中没有条目，则创建一个新设备（需要二维码配对）。
+            on_qr: 接收每个 :class:`QREvent` 的异步/同步 callable，
+                或者字面量字符串 ``"terminal"`` 以使用内置的终端渲染器。
 
         Raises:
-            RuntimeError: if the app has not been :meth:`start`-ed.
-            AccountAlreadyExistsError: if ``account_key`` is already
-                registered with this :class:`FastMeow` instance.
+            RuntimeError: 如果应用尚未 :meth:`start`。
+            AccountAlreadyExistsError: 如果 ``account_key`` 已在此 :class:`FastMeow` 实例中注册。
         """
         if not self._started or self._transport is None or self._manifest is None:
             raise RuntimeError("FastMeow not started; call start() or use 'async with'")
@@ -461,27 +439,25 @@ class FastMeow:
         display_name: str,
         jid: str | None,
     ) -> None:
-        """Run EnsureAccount + Connect for a freshly-added account.
+        """为新添加的账号运行 EnsureAccount + Connect。
 
-        Any exception is captured into ``handle._terminal_failure`` so
-        :meth:`AccountHandle.ready` raises it; we do not propagate to
-        the asyncio task layer (the task would otherwise log an
-        unhandled-exception warning at GC time).
+        任何异常都会捕获到 ``handle._terminal_failure`` 中，
+        以便 :meth:`AccountHandle.ready` 将其抛出；我们不会将其传播到 asyncio 任务层
+        （否则任务在垃圾回收时会记录未处理异常警告）。
         """
-        # _started + transport + manifest are guaranteed by add_account.
+        # _started + transport + manifest 由 add_account 保证。
         assert self._transport is not None
         assert self._manifest is not None
         account_key = handle.account_key
 
         try:
-            # Resolve effective JID: explicit arg > manifest > "" (new).
+            # 解析有效 JID：显式参数 > manifest 清单 > "" (新建)。
             effective_jid = jid
             if effective_jid is None:
                 existing = self._manifest.get(account_key)
                 effective_jid = existing.jid if existing is not None else ""
 
-            # Persist intent before talking to the sidecar so a crash
-            # mid-call still leaves the manifest consistent.
+            # 在与 sidecar 通信之前持久化意图，这样即使调用中途崩溃，manifest 清单也能保持一致。
             await self._manifest.register(account_key, jid=effective_jid)
 
             state, _created = await self._transport.ensure_account(
@@ -493,15 +469,13 @@ class FastMeow:
             if state.jid and state.jid != effective_jid:
                 await self._manifest.update_jid(account_key, state.jid)
 
-            # Connect after EnsureAccount; this is what triggers QR for
-            # unpaired devices and reattach for paired ones.
+            # 在 EnsureAccount 之后连接；这将触发未配对设备的二维码生成和已配对设备的重新连接。
             connected_state = await self._transport.connect(account_key)
             handle._apply_state(connected_state.state, jid=connected_state.jid)
             if connected_state.jid and connected_state.jid != state.jid:
                 await self._manifest.update_jid(account_key, connected_state.jid)
         except asyncio.CancelledError:
-            # stop() is tearing us down; surface as failure so any
-            # ready() awaiter wakes up rather than hanging forever.
+            # stop() 正在拆除我们；将其作为失败暴露出来，以便任何 ready() 等待者被唤醒而不是永远挂起。
             handle._fail(
                 PairingFailedError(f"account {account_key!r} bootstrap cancelled (app stopping)")
             )
@@ -509,11 +483,11 @@ class FastMeow:
         except BaseException as exc:
             _log.exception("bootstrap failed for account %r", account_key)
             handle._fail(exc)
-            # Drop the now-unusable handle so the user can retry add_account.
+            # 丢弃现在不可用的句柄，以便用户可以重试 add_account。
             self._handles.pop(account_key, None)
 
     async def remove_account(self, account_key: str, *, logout: bool = False) -> None:
-        """Disconnect (or log out) an account and forget it locally."""
+        """断开（或登出）账号并在本地遗忘它。"""
         if self._transport is None or self._manifest is None:
             raise RuntimeError("FastMeow not started")
         if account_key not in self._handles:
@@ -527,7 +501,7 @@ class FastMeow:
         del self._handles[account_key]
 
     def get_handle(self, account_key: str) -> AccountHandle:
-        """Return the previously-created handle for ``account_key``."""
+        """返回之前为 ``account_key`` 创建的句柄。"""
         h = self._handles.get(account_key)
         if h is None:
             raise AccountNotFoundError(account_key)
@@ -535,33 +509,30 @@ class FastMeow:
 
     @property
     def accounts(self) -> dict[str, AccountHandle]:
-        """Snapshot of currently registered handles."""
+        """当前注册句柄的快照。"""
         return dict(self._handles)
 
     @property
     def router(self) -> Router:
-        """Root router; user code usually mounts subrouters via
-        :meth:`include_router` instead of touching this directly."""
+        """根路由器；用户代码通常通过 :meth:`include_router` 挂载子路由器，而不是直接操作此属性。"""
         return self._router
 
     @property
     def transport(self) -> _transport.Transport:
-        """Underlying typed gRPC client. Escape hatch for advanced users."""
+        """底层的类型化 gRPC 客户端。为高级用户提供的逃生口。"""
         if self._transport is None:
             raise RuntimeError("FastMeow not started")
         return self._transport
 
-    # -- internal hooks ----------------------------------------------------
+    # -- 内部钩子 ----------------------------------------------------
 
     async def _notify_handle(self, event: Event) -> None:
-        """Forward an event to its account's :class:`AccountHandle`.
+        """将事件转发到其对应账号的 :class:`AccountHandle`。
 
-        Also persists the freshly-issued JID on :class:`PairSuccessEvent`
-        so a process restart can reattach without re-pairing. The
-        manifest write is best-effort: any error is logged but never
-        raised, since the next :class:`ConnectedEvent` (which carries
-        the same JID via ``account_jid``) will retry persistence
-        through the bootstrap path.
+        同时在 :class:`PairSuccessEvent` 上持久化新分配的 JID，
+        以便进程重启后无需重新配对即可重新连接。
+        manifest 清单写入是尽力而为的：任何错误都会被记录但永远不会抛出，
+        因为下一个 :class:`ConnectedEvent`（它通过 ``account_jid`` 携带相同的 JID）将通过引导路径重试持久化。
         """
         handle = self._handles.get(event.account_key)
         if handle is None:
@@ -576,12 +547,12 @@ class FastMeow:
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# 辅助函数
 # ---------------------------------------------------------------------------
 
 
 def _resolve_qr_callback(spec: QRCallback | Literal["terminal"]) -> QRCallback:
-    """Translate the ``on_qr=`` shorthand to a callable."""
+    """将 ``on_qr=`` 简写形式转换为 callable。"""
     if spec == "terminal":
 
         def render(qr: QREvent) -> None:
@@ -594,6 +565,6 @@ def _resolve_qr_callback(spec: QRCallback | Literal["terminal"]) -> QRCallback:
 __all__ = ["AccountHandle", "FastMeow"]
 
 
-# Re-export so users can `from fastmeow import AccountError` if they like;
-# the manifest layer also raises ManifestError, kept in `exceptions`.
+# 重新导出以便用户可以根据需要执行 `from fastmeow import AccountError`；
+# manifest 清单层也会抛出 ManifestError，均保留在 `exceptions` 中。
 _ = AccountError

@@ -1,6 +1,6 @@
-"""Per-event context object passed to user handlers.
+"""传递给用户处理器的每个事件的上下文对象。
 
-A handler in FastMeow has one of these signatures::
+FastMeow 中的处理器具有以下签名之一：:
 
     @router.message()
     async def echo(msg: MessageEvent, ctx: Ctx) -> None: ...
@@ -11,26 +11,20 @@ A handler in FastMeow has one of these signatures::
     @router.connected()
     async def on_up(ctx: Ctx) -> None: ...
 
-The :class:`Ctx` packages everything a handler might need *for this
-specific event* without forcing handlers to remember globals or fish
-state out of an app object:
+:class:`Ctx` 封装了处理器*针对此特定事件*可能需要的所有内容，
+而无需处理器记住全局变量或从应用对象中搜寻状态：
 
-* ``account_key`` — which account dispatched this event.
-* ``account_jid`` — the JID of that account at observation time.
-* ``event``       — the public event object (same one bound to ``msg``
-                    when the handler accepts both).
-* ``client``      — an :class:`AccountClient` bound to ``account_key``;
-                    use it to send arbitrary messages.
-* ``reply()``     — convenience for the very common "respond in the
-                    same chat" case. Available **only** when the event
-                    is a :class:`MessageEvent`; otherwise raises
-                    :class:`ReplyNotAvailableError` so the failure is
-                    immediate and obvious instead of an opaque
-                    ``AttributeError`` later.
+* ``account_key`` — 派发此事件的账号。
+* ``account_jid`` — 观察到事件时该账号的 JID。
+* ``event``       — 公开事件对象（当处理器同时接受两个参数时，与绑定到 ``msg`` 的对象相同）。
+* ``client``      — 绑定到 ``account_key`` 的 :class:`AccountClient`；用它来发送任意消息。
+* ``reply()``     — 针对非常常见的“在同一聊天中回复”情况的便捷方法。
+                    **仅**在事件为 :class:`MessageEvent` 时可用；
+                    否则会抛出 :class:`ReplyNotAvailableError`，
+                    从而使失败立即且显而易见，而不是随后抛出晦涩的 ``AttributeError``。
 
-Ctx instances are created by the dispatcher and discarded after the
-handler returns. They are not safe to stash for use after the
-handler exits — the underlying client may be torn down at any time.
+Ctx 实例由派发器创建，并在处理器返回后销毁。
+它们不适合存储起来在处理器退出后使用 — 底层客户端可能随时被拆除。
 """
 
 from __future__ import annotations
@@ -49,11 +43,10 @@ __all__ = ["AccountClient", "Ctx"]
 
 
 class AccountClient(Protocol):
-    """Account-scoped RPC surface exposed on :attr:`Ctx.client`.
+    """:attr:`Ctx.client` 上暴露的账号作用域 RPC 接口。
 
-    Defined as a ``Protocol`` so the dispatcher can stay ignorant of
-    the concrete gRPC implementation in :mod:`fastmeow._transport`,
-    and so tests can substitute a fake without touching the wire.
+    定义为 ``Protocol``，以便派发器无需了解 :mod:`fastmeow._transport` 中的具体 gRPC 实现，
+    同时也方便测试在不触及网络的情况下替换为模拟对象。
     """
 
     @property
@@ -61,7 +54,7 @@ class AccountClient(Protocol):
 
     @property
     def jid(self) -> str:
-        """Current JID for this account; empty string if unpaired."""
+        """此账号当前的 JID；如果未配对则为空字符串。"""
         ...
 
     async def send_text(
@@ -72,30 +65,27 @@ class AccountClient(Protocol):
         client_msg_id: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> SendResult:
-        """Send a plain-text message.
+        """发送纯文本消息。
 
-        ``client_msg_id`` is for idempotency. If you don't pass one,
-        FastMeow generates a UUIDv4. Passing the same id within the
-        sidecar's dedup window (5 min / 10k entries) returns the prior
-        :class:`SendResult` with ``deduped=True`` instead of resending.
+        ``client_msg_id`` 用于幂等性。如果不传递，FastMeow 将生成一个 UUIDv4。
+        在 sidecar 的去重窗口（5 分钟 / 1 万条目）内传递相同的 ID，
+        将返回先前的 :class:`SendResult` 并设置 ``deduped=True``，而不是重新发送。
         """
         ...
 
 
 @dataclass(frozen=True, slots=True)
 class Ctx:
-    """Per-event context handed to user handlers.
+    """分发给用户处理器的每个事件的上下文。
 
-    Fields:
-        account_key: stable user-chosen id for the account.
-        account_jid: WhatsApp JID at the time of this event; may be
-            empty during the brief pre-pair window.
-        event: the public event being dispatched.
-        client: account-scoped RPC surface; see :class:`AccountClient`.
+    Args:
+        account_key: 账号的稳定用户选择 ID。
+        account_jid: 此事件发生时的 WhatsApp JID；在配对前的短暂窗口内可能为空。
+        event: 正在派发的公开事件。
+        client: 账号作用域的 RPC 接口；参见 :class:`AccountClient`。
 
-    Use :meth:`reply` when responding to a :class:`MessageEvent`.
-    Use :meth:`send` for any other outbound traffic (broadcast,
-    cross-chat reply, scheduled messages, etc.).
+    响应 :class:`MessageEvent` 时请使用 :meth:`reply`。
+    对于任何其他外发流量（广播、跨聊天回复、定时消息等），请使用 :meth:`send`。
     """
 
     account_key: str
@@ -103,7 +93,7 @@ class Ctx:
     event: Event
     client: AccountClient
 
-    # -- convenience -------------------------------------------------------
+    # -- 便捷方法 -------------------------------------------------------
 
     async def reply(
         self,
@@ -112,14 +102,13 @@ class Ctx:
         quoted: bool = True,
         client_msg_id: str | None = None,
     ) -> SendResult:
-        """Reply in the same chat as the inbound message.
+        """在与收到的消息相同的聊天中进行回复。
 
-        ``quoted=True`` (default) attaches the inbound ``message_id`` as
-        a quoted reference. Set ``quoted=False`` for a plain follow-up.
+        ``quoted=True``（默认值）会将收到的 ``message_id`` 作为引用附加。
+        设置 ``quoted=False`` 则进行普通的后续回复。
 
         Raises:
-            ReplyNotAvailableError: if this Ctx was built for a
-                non-message event (e.g. ``ConnectedEvent``).
+            ReplyNotAvailableError: 如果此 Ctx 是为非消息事件（例如 ``ConnectedEvent``）构建的。
         """
         if not isinstance(self.event, MessageEvent):
             raise ReplyNotAvailableError(
@@ -141,13 +130,11 @@ class Ctx:
         *,
         client_msg_id: str | None = None,
     ) -> SendResult:
-        """Send a text message to an arbitrary JID using this ctx's
-        account.
+        """使用此上下文的账号向任意 JID 发送文本消息。
 
-        Equivalent to ``ctx.client.send_text(to_jid, text, ...)`` but
-        spelled the same way as :meth:`reply` for symmetry, so handlers
-        don't have to mix two call styles when they branch between
-        "reply here" and "notify someone else".
+        等同于 ``ctx.client.send_text(to_jid, text, ...)``，
+        但为了对称性，其拼写方式与 :meth:`reply` 相同，
+        这样处理器在“在此处回复”和“通知其他人”之间切换时，就无需混合两种调用风格。
         """
         return await self.client.send_text(
             to_jid,
@@ -155,7 +142,7 @@ class Ctx:
             client_msg_id=client_msg_id,
         )
 
-    # -- introspection helpers --------------------------------------------
+    # -- 内省辅助属性 --------------------------------------------
 
     @property
     def is_message(self) -> bool:
@@ -163,12 +150,11 @@ class Ctx:
 
     @property
     def message(self) -> MessageEvent:
-        """Return ``self.event`` narrowed to :class:`MessageEvent`.
+        """返回缩小为 :class:`MessageEvent` 类型的 ``self.event``。
 
-        Convenience for handlers that prefer ``ctx.message.text`` over
-        an isinstance check. Raises :class:`ReplyNotAvailableError`
-        (same exception family as :meth:`reply`) if the event is not a
-        message — this keeps the failure mode consistent.
+        为偏好 ``ctx.message.text`` 而非 isinstance 检查的处理器提供便利。
+        如果事件不是消息，则抛出 :class:`ReplyNotAvailableError`
+        （与 :meth:`reply` 属于同一异常族）— 这保持了失败模式的一致性。
         """
         if not isinstance(self.event, MessageEvent):
             raise ReplyNotAvailableError(

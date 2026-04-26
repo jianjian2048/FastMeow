@@ -1,8 +1,7 @@
-"""Router — group handlers by event type and dispatch with filter
-chains.
+"""路由器 — 按事件类型对处理器进行分组，并通过过滤器链进行派发。
 
-Inspired by aiogram's ``Router`` and FastStream's broker decorators.
-A :class:`Router` is the user-facing handler registry::
+受 aiogram 的 ``Router`` 和 FastStream 的 broker 装饰器启发。
+:class:`Router` 是面向用户的处理器注册表：:
 
     from fastmeow import Router, F
 
@@ -16,26 +15,23 @@ A :class:`Router` is the user-facing handler registry::
     async def hello(ctx):
         log.info("account %s connected", ctx.account_key)
 
-A :class:`fastmeow.FastMeow` app maintains a root router and lets the
-user mount sub-routers via :meth:`Router.include_router` for code
-organisation. Dispatch order is registration order; the first handler
-whose filter chain returns ``passed=True`` *and* whose handler returns
-without raising the special :class:`SkipHandler` sentinel wins.
+:class:`fastmeow.FastMeow` 应用维护一个根路由器，并允许用户通过
+:meth:`Router.include_router` 挂载子路由器以组织代码。
+派发顺序即注册顺序；第一个过滤器链返回 ``passed=True`` 且处理器返回时
+未抛出特殊的 :class:`SkipHandler` 哨兵异常的处理器胜出。
 
-Handler signature injection
+处理器签名注入
 ---------------------------
-A handler may take any combination of these four named parameters
-(positional or keyword), in any order. Phase 1 whitelist:
+处理器可以采用这四个命名参数（位置参数或关键字参数）的任意组合，顺序不限。
+Phase 1 白名单：
 
-* ``msg`` or ``event`` — the public event object
-* ``ctx``              — the :class:`Ctx`
-* ``qr``               — the :class:`QREvent` (only on QR handlers)
-* ``match``            — ``re.Match`` from the first matching regex
-                          filter, or ``None``
+* ``msg`` 或 ``event`` — 公开事件对象
+* ``ctx``              — :class:`Ctx`
+* ``qr``               — :class:`QREvent`（仅限 QR 处理器）
+* ``match``            — 第一个匹配的正则过滤器的 ``re.Match``，或者为 ``None``
 
-Any other parameter name (or an unrecognised parameter without a
-default) raises :class:`HandlerSignatureError` at registration time —
-fail-fast beats a confusing ``TypeError`` at first dispatch.
+任何其他参数名称（或没有默认值的未识别参数）都会在注册时抛出
+:class:`HandlerSignatureError` — 尽早失败优于在首次派发时抛出令人困惑的 ``TypeError``。
 """
 
 from __future__ import annotations
@@ -69,37 +65,34 @@ __all__ = ["Router", "SkipHandler"]
 
 
 class SkipHandler(Exception):
-    """Raise from inside a handler to indicate "this isn't actually for
-    me, try the next one". Filters are the preferred way to skip; this
-    is the escape hatch for cases where the decision needs the full
-    handler context.
+    """在处理器内部抛出此异常，以表示“这实际上不是给我的，请尝试下一个”。
+    过滤器是跳过处理的首选方式；此异常是为决策需要完整的处理器上下文的情况提供的逃生口。
     """
 
 
 # ---------------------------------------------------------------------------
-# Internal handler record
+# 内部处理器记录
 # ---------------------------------------------------------------------------
 
 
-# Python 3.13 supports type statements but we keep ``Callable`` aliases
-# explicit for clarity in tracebacks.
+# Python 3.13 支持 type 语句，但为了回溯 (tracebacks) 清晰，
+# 我们保持 ``Callable`` 别名显式定义。
 HandlerFn = Callable[..., Awaitable[None]]
 
 
 @dataclass(frozen=True, slots=True)
 class _ParamPlan:
-    """Pre-computed plan for adapting a handler's signature.
+    """预先计算的用于适配处理器签名的计划。
 
-    Built once at registration time so that the dispatcher does no
-    reflection on the hot path.
+    在注册时构建一次，以便派发器在热路径 (hot path) 上不进行反射操作。
     """
 
     accepts_event: bool
-    """True if the handler has ``msg`` or ``event`` parameter."""
+    """如果处理器有 ``msg`` 或 ``event`` 参数，则为 True。"""
 
     event_param_name: str
-    """The actual parameter name to bind the event to ('msg' or 'event').
-    Empty if ``accepts_event`` is False."""
+    """绑定事件的实际参数名称（'msg' 或 'event'）。
+    如果 ``accepts_event`` 为 False，则为空字符串。"""
 
     accepts_ctx: bool
     accepts_qr: bool
@@ -115,7 +108,7 @@ class _Handler:
 
 @dataclass(slots=True)
 class _HandlerSet:
-    """Mutable collection of handlers for one event type."""
+    """单个事件类型的处理器可变集合。"""
 
     items: list[_Handler] = field(default_factory=list)
 
@@ -129,17 +122,15 @@ class _HandlerSet:
 
 
 class Router:
-    """Registers handlers and dispatches events to them.
+    """注册处理器并将事件派发给它们。
 
-    A user typically constructs one root :class:`Router`, decorates
-    handlers on it, and passes it to :class:`fastmeow.FastMeow`. Larger
-    applications can split handlers across multiple routers and combine
-    them via :meth:`include_router`.
+    用户通常构造一个根 :class:`Router`，在其上装饰处理器，并将其传递给
+    :class:`fastmeow.FastMeow`。较大的应用可以将处理器拆分到多个路由器中，
+    并通过 :meth:`include_router` 将其组合。
     """
 
-    # One handler set per public event class. Using the class itself as
-    # the dict key (rather than a string name) means dispatch is exact
-    # and refactoring-safe.
+    # 每个公开事件类对应一个处理器集合。使用类本身作为 dict 的键
+    # （而不是字符串名称）意味着派发是精确且重构安全的。
     _SUPPORTED_EVENTS: tuple[type[Event], ...] = (
         MessageEvent,
         ConnectedEvent,
@@ -155,19 +146,17 @@ class Router:
         self._sets: dict[type[Event], _HandlerSet] = {
             cls: _HandlerSet() for cls in self._SUPPORTED_EVENTS
         }
-        # Sub-routers are flattened at dispatch time so we don't pay
-        # tree-walk overhead per event. Kept as a separate list for
-        # diagnostics / repr.
+        # 子路由器在派发时被展平，因此我们不会为每个事件支付树遍历开销。
+        # 作为一个单独的列表保留，用于诊断/展示。
         self._sub_routers: list[Router] = []
 
-    # -- composition -------------------------------------------------------
+    # -- 组合 -------------------------------------------------------
 
     def include_router(self, other: Router) -> None:
-        """Mount another router's handlers under this one.
+        """将另一个路由器的处理器挂载到此路由器下。
 
-        Handlers from ``other`` are appended to *this* router's sets at
-        call time, so subsequent registrations on ``other`` are also
-        visible. Cycles are rejected.
+        ``other`` 中的处理器在调用时会被追加到*此*路由器的集合中，
+        因此随后在 ``other`` 上的注册也是可见的。拒绝循环包含。
         """
         if other is self:
             raise ValueError("router cannot include itself")
@@ -176,7 +165,7 @@ class Router:
         self._sub_routers.append(other)
 
     def _would_create_cycle(self, candidate: Router) -> bool:
-        # DFS over candidate's transitive sub-routers looking for self.
+        # 对候选项的传递子路由器进行 DFS，寻找 self。
         stack = [candidate]
         seen: set[int] = set()
         while stack:
@@ -189,10 +178,10 @@ class Router:
             stack.extend(r._sub_routers)
         return False
 
-    # -- decorators --------------------------------------------------------
+    # -- 装饰器 --------------------------------------------------------
 
     def message(self, *filters: Filter) -> Callable[[HandlerFn], HandlerFn]:
-        """Register a handler for :class:`MessageEvent`."""
+        """为 :class:`MessageEvent` 注册处理器。"""
         return self._make_decorator(MessageEvent, filters)
 
     def connected(self, *filters: Filter) -> Callable[[HandlerFn], HandlerFn]:
@@ -211,10 +200,10 @@ class Router:
         return self._make_decorator(LoggedOutEvent, filters)
 
     def unknown(self, *filters: Filter) -> Callable[[HandlerFn], HandlerFn]:
-        """Register a fallback handler for unrecognised events."""
+        """为未识别的事件注册兜底处理器。"""
         return self._make_decorator(UnknownEvent, filters)
 
-    # -- registration internals -------------------------------------------
+    # -- 注册内部逻辑 -------------------------------------------
 
     def _make_decorator(
         self,
@@ -233,17 +222,16 @@ class Router:
 
         return decorator
 
-    # -- dispatch ----------------------------------------------------------
+    # -- 派发 ----------------------------------------------------------
 
     async def dispatch(self, event: Event, ctx: Ctx) -> None:
-        """Run the first matching handler for ``event``.
+        """运行第一个匹配 ``event`` 的处理器。
 
-        Iteration follows registration order. The first handler whose
-        filter chain passes is invoked; the dispatch then stops. A
-        handler may opt out by raising :class:`SkipHandler`, in which
-        case iteration continues to the next candidate. Any other
-        exception propagates to the caller (the dispatcher / app),
-        which decides whether to log-and-continue or treat it as fatal.
+        迭代遵循注册顺序。调用第一个通过过滤器链的处理器；随后停止派发。
+        处理器可以通过抛出 :class:`SkipHandler` 来选择退出处理，
+        在这种情况下迭代将继续到下一个候选项。
+        任何其他异常都会传播给调用者（派发器 / 应用），
+        由其决定是记录并继续还是视为致命错误。
         """
         cls = type(event)
         for handler in self._collect_for(cls):
@@ -274,7 +262,7 @@ class Router:
 
 
 # ---------------------------------------------------------------------------
-# Filter evaluation
+# 过滤器评估
 # ---------------------------------------------------------------------------
 
 
@@ -282,7 +270,7 @@ async def _evaluate_filters(
     filters: tuple[Filter, ...],
     event: Event,
 ) -> FilterResult:
-    """Evaluate every filter; AND them together; collect first regex match."""
+    """评估每个过滤器；对它们进行“与”操作；收集第一个正则匹配结果。"""
     if not filters:
         return FilterResult(passed=True, match=None)
 
@@ -294,7 +282,7 @@ async def _evaluate_filters(
                 return FilterResult(passed=False)
             accumulated_match = accumulated_match or res.match
             continue
-        # Plain callable: pass the event positionally. May be sync or async.
+        # 普通 callable：按位置传递事件。可以是同步或异步的。
         out = f(event)
         if inspect.isawaitable(out):
             out = await out
@@ -304,7 +292,7 @@ async def _evaluate_filters(
 
 
 # ---------------------------------------------------------------------------
-# Signature inspection + invocation
+# 签名检查 + 调用
 # ---------------------------------------------------------------------------
 
 
@@ -312,17 +300,15 @@ _VALID_PARAM_NAMES = frozenset({"msg", "event", "ctx", "qr", "match"})
 
 
 def _build_param_plan(fn: HandlerFn, event_cls: type[Event]) -> _ParamPlan:
-    """Validate handler signature and produce a :class:`_ParamPlan`.
+    """验证处理器签名并生成 :class:`_ParamPlan`。
 
-    Rules:
-    * Only the names in :data:`_VALID_PARAM_NAMES` may appear without
-      a default value.
-    * A handler may take ``msg`` or ``event`` (not both); if it takes
-      neither, it must take ``ctx`` (a no-arg handler is also allowed).
-    * ``qr`` is only valid on QR handlers; we don't enforce this
-      strictly because a user might genuinely use ``qr`` as a generic
-      name and still expect the event injection — but we DO refuse
-      ``qr`` for non-QR event classes to avoid surprising binds.
+    规则：
+    * 只有 :data:`_VALID_PARAM_NAMES` 中的名称可以出现在没有默认值的参数中。
+    * 处理器可以采用 ``msg`` 或 ``event``（不能同时采用）；如果两者都不采用，
+      则必须采用 ``ctx``（也允许无参数处理器）。
+    * ``qr`` 仅在 QR 处理器上有效；我们不严格强制执行此规则，因为用户可能确实将
+      ``qr`` 用作泛型名称并仍期望事件注入 — 但我们确实拒绝为非 QR 事件类使用
+      ``qr``，以避免令人惊讶的绑定。
     """
     sig = inspect.signature(fn)
     accepts_event = False

@@ -1,8 +1,7 @@
-"""Magic filter ``F`` — aiogram-style declarative event predicates.
+"""魔法过滤器 ``F`` — aiogram 风格的声明式事件谓词。
 
-A filter is a thing the router evaluates against an event before
-deciding whether to invoke a handler. FastMeow ships a tiny "magic"
-DSL inspired by aiogram's :class:`MagicFilter`::
+过滤器是路由器在决定是否调用处理器之前针对事件评估的内容。
+FastMeow 提供了一个受 aiogram 的 :class:`MagicFilter` 启发的微型“魔法”DSL：:
 
     from fastmeow import F
 
@@ -15,25 +14,21 @@ DSL inspired by aiogram's :class:`MagicFilter`::
     @router.message(F.text.regex(r"^hello (?P<name>\w+)"))
     async def greet(msg, ctx, match): ...
 
-How it works
+工作原理
 ------------
-``F`` is a singleton :class:`_MagicRoot`. Attribute access
-(``F.text``), comparison (``== "ping"``), and binary-bool combinators
-(``& | ~``) all return new :class:`_Magic` nodes that *describe* the
-predicate without evaluating it. The dispatcher later calls
-:meth:`_Magic.resolve(event)` to get a concrete :class:`bool` plus an
-optional ``re.Match`` (so handlers can capture regex groups).
+``F`` 是一个 :class:`_MagicRoot` 单例。属性访问 (``F.text``)、
+比较 (``== "ping"``) 以及二进制布尔组合器 (``& | ~``) 都会返回新的 :class:`_Magic` 节点，
+这些节点*描述*了谓词而不会立即评估它。派发器随后会调用
+:meth:`_Magic.resolve(event)` 来获取具体的 :class:`bool` 结果，
+以及一个可选的 ``re.Match``（以便处理器捕获正则分组）。
 
-Design constraints
+设计约束
 ------------------
-* No magic on user-defined types — everything operates on the public
-  :class:`fastmeow.types.Event` family. If you need a richer test,
-  pass a plain callable instead: ``@router.message(my_predicate)``.
-* No reflection / inspect tricks. The magic AST is interpreted, not
-  compiled. This trades a little speed for crystal-clear errors and
-  picklability (relevant if we ever ship a worker mode).
-* All comparisons are short-circuit safe: any branch that touches an
-  attribute the event doesn't have evaluates to ``False``, never raises.
+* 不对用户定义的类型使用魔法 — 所有操作都针对公开的 :class:`fastmeow.types.Event` 族。
+  如果你需要进行更复杂的测试，请传递普通的 callable：``@router.message(my_predicate)``。
+* 不使用反射或 inspect 技巧。魔法 AST 是解释执行的，而不是编译执行的。
+  这牺牲了少许速度，以换取清晰的错误提示和可序列化性（如果我们以后提供 worker 模式，这将非常重要）。
+* 所有比较都是短路安全的：任何触及事件不具备的属性的分支都会评估为 ``False``，永远不会抛出异常。
 """
 
 from __future__ import annotations
@@ -46,21 +41,21 @@ from typing import Any, Final, Union
 __all__ = ["F", "Filter", "FilterResult"]
 
 
-# A user-supplied filter can be either:
-#   - a magic node (``F.text == "ping"``),
-#   - a plain callable returning bool / awaitable bool,
-#   - ``None`` (no filter).
+# 用户提供的过滤器可以是：
+#   - 一个魔法节点 (``F.text == "ping"``),
+#   - 一个返回 bool / awaitable bool 的普通 callable,
+#   - ``None`` (无过滤器).
 Filter = Union["_Magic", Callable[..., bool], Callable[..., Awaitable[bool]]]
 
 
 @dataclass(frozen=True, slots=True)
 class FilterResult:
-    """Outcome of evaluating a filter chain against an event.
+    """针对事件评估过滤器链的结果。
 
-    ``passed`` is the boolean answer; ``match`` is the
-    :class:`re.Match` produced by the *first* regex predicate in the
-    chain that matched, or ``None``. Handlers that take a ``match``
-    parameter receive this value.
+    Args:
+        passed: 布尔结果。
+        match: 链中第一个匹配的正则谓词产生的 :class:`re.Match`，或者为 ``None``。
+            接受 ``match`` 参数的处理器将接收此值。
     """
 
     passed: bool
@@ -73,11 +68,10 @@ class FilterResult:
 
 
 class _Magic:
-    """Base class for magic AST nodes.
+    """魔法 AST 节点的基类。
 
-    Subclasses override :meth:`evaluate` to produce a ``(bool, match)``
-    pair. ``match`` is ``None`` for non-regex nodes; for combinators
-    it's the first non-None match found among children.
+    子类通过重写 :meth:`evaluate` 来产生 ``(bool, match)`` 对。
+    对于非正则节点，``match`` 为 ``None``；对于组合器，它是子节点中找到的第一个非 None 匹配。
     """
 
     __slots__ = ()
@@ -119,7 +113,7 @@ def _coerce(obj: Any) -> _Magic:
 
 
 class _Const(_Magic):
-    """Constant boolean (used internally for ``True``/``False`` literals)."""
+    """常量布尔值（内部用于 ``True``/``False`` 字面量）。"""
 
     __slots__ = ("_value",)
 
@@ -131,11 +125,10 @@ class _Const(_Magic):
 
 
 class _Attr(_Magic):
-    """Attribute access chain rooted at the event.
+    """根植于事件的属性访问链。
 
-    ``F.text`` produces ``_Attr(("text",))``; ``F.foo.bar`` produces
-    ``_Attr(("foo", "bar"))``. Truthiness of the resolved value is the
-    default boolean; richer predicates wrap this in :class:`_Cmp` etc.
+    ``F.text`` 产生 ``_Attr(("text",))``；``F.foo.bar`` 产生 ``_Attr(("foo", "bar"))``。
+    解析值的真值是默认的布尔值结果；更丰富的谓词会将此包装在 :class:`_Cmp` 等类中。
     """
 
     __slots__ = ("_path",)
@@ -143,9 +136,8 @@ class _Attr(_Magic):
     def __init__(self, path: tuple[str, ...]) -> None:
         self._path = path
 
-    # Allow further attribute chaining. We deliberately don't use
-    # ``__getattr__`` on the root ``_MagicRoot`` for this — keeping
-    # the chain class separate makes the type signatures cleaner.
+    # 允许进一步的属性链式访问。我们特意不对根对象 ``_MagicRoot`` 使用
+    # ``__getattr__`` 来实现此功能 — 将链式访问类分开可以使类型签名更清晰。
     def __getattr__(self, name: str) -> _Attr:
         if name.startswith("_"):
             raise AttributeError(name)
@@ -186,8 +178,8 @@ class _Attr(_Magic):
     def __ge__(self, other: object) -> _Magic:
         return _Cmp(self, "ge", other)
 
-    # Keep this class hashable so it can live in a set/dict if anyone
-    # wants to. Identity hash is fine — magic nodes are not values.
+    # 保持此类可哈希，以便它可以根据需要存放在 set/dict 中。
+    # 使用标识哈希 (identity hash) 即可 — 魔法节点不是值对象。
     def __hash__(self) -> int:
         return id(self)
 
@@ -210,14 +202,13 @@ class _Attr(_Magic):
         return _In(self, container)
 
 
-# Sentinel used by _Attr to represent "attribute not found" without
-# raising. Distinct from ``None`` because ``None`` is a legitimate
-# value for many event fields.
+# _Attr 使用的哨兵对象，用于在不抛出异常的情况下表示“属性未找到”。
+# 与 ``None`` 不同，因为 ``None`` 可能是许多事件字段的合法值。
 _MISSING: Final = object()
 
 
 class _Cmp(_Magic):
-    """Binary comparison: ``F.x <op> literal``."""
+    """二元比较：``F.x <op> literal``。"""
 
     __slots__ = ("_lhs", "_op", "_rhs")
 
@@ -249,10 +240,10 @@ class _Cmp(_Magic):
 
 
 class _StringPredicate(_Magic):
-    """``F.text.startswith("/")`` and friends.
+    """``F.text.startswith("/")`` 及其同类谓词。
 
-    Always coerces the LHS to ``str`` via ``str(val)`` before testing,
-    so comparing a numeric field still works predictably.
+    在测试之前，总是通过 ``str(val)`` 将左侧值强制转换为 ``str``，
+    这样比较数值字段时依然符合预期。
     """
 
     __slots__ = ("_arg", "_kind", "_lhs")
@@ -277,7 +268,7 @@ class _StringPredicate(_Magic):
 
 
 class _Regex(_Magic):
-    """``F.text.regex(...)`` — produces a match for handler injection."""
+    """``F.text.regex(...)`` — 产生用于处理器注入的匹配结果。"""
 
     __slots__ = ("_lhs", "_pattern")
 
@@ -294,7 +285,7 @@ class _Regex(_Magic):
 
 
 class _In(_Magic):
-    """``F.account_key.in_({"alice", "bob"})``."""
+    """``F.account_key.in_({"alice", "bob"})``。"""
 
     __slots__ = ("_container", "_lhs")
 
@@ -364,7 +355,7 @@ class _Not(_Magic):
 
 
 class _MagicRoot:
-    """Singleton root. ``F.x`` returns ``_Attr(("x",))``."""
+    """单例根节点。``F.x`` 返回 ``_Attr(("x",))``。"""
 
     __slots__ = ()
 

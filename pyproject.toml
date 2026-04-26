@@ -69,7 +69,12 @@ extend-exclude = ["src/fastmeow/_generated", "gen"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
-ignore = ["E501"]  # line length handled by formatter
+ignore = [
+    "E501",   # line length handled by formatter
+    "RUF001", # ambiguous unicode chars in identifiers (none expected; safe to silence)
+    "RUF002", # ambiguous unicode chars in docstrings (Chinese punctuation is intentional)
+    "RUF003", # ambiguous unicode chars in comments (Chinese punctuation is intentional)
+]
 
 [tool.mypy]
 python_version = "3.12"

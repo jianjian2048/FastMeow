@@ -1,25 +1,18 @@
-"""gRPC transport: typed wrapper around the GatewayService stubs.
+"""gRPC 传输层：GatewayService stub 的类型化封装。
 
-This module is the *only* place in FastMeow that imports the generated
-protobuf/grpc code. Everything else above it (dispatcher, app, user code)
-talks in terms of public dataclasses from ``fastmeow.types`` and the
-typed ``Transport`` methods defined here.
+此模块是 FastMeow 中 *唯一* 导入生成的 protobuf/gRPC 代码的地方。其上层的所有组件（派发器、app、用户代码）
+都通过 ``fastmeow.types`` 中的公开数据类和此处定义的类型化 ``Transport`` 方法进行交互。
 
-Goals:
-    * Hide the generated stubs behind a narrow, ergonomic API.
-    * Convert proto messages -> public dataclasses on the way in,
-      and dataclass kwargs -> proto on the way out.
-    * Translate ``grpc.aio.AioRpcError`` into the FastMeow exception
-      hierarchy so callers never need to import ``grpc`` themselves.
-    * Provide a single ``connect()`` that takes the address printed by
-      the supervisor and returns a ready-to-use ``Transport``.
+目标：
+    * 将生成的 stub 隐藏在精简且易用的 API 之后。
+    * 在输入时将 proto 消息转换为公开数据类，在输出时将数据类参数转换为 proto。
+    * 将 ``grpc.aio.AioRpcError`` 转换为 FastMeow 异常体系，使调用者无需自行导入 ``grpc``。
+    * 提供单一的 ``connect()`` 函数，接收监督器返回的地址并返回就绪的 ``Transport``。
 
-Reconnect policy (Phase 2):
-    The sidecar runs on the same machine over loopback TCP; the channel
-    only fails if the sidecar crashes. We expose ``StreamEvents`` as an
-    async iterator and let the dispatcher decide what to do on
-    ``UNAVAILABLE`` (typically: stop, surface to the user, don't retry
-    silently). A future milestone may add automatic backoff retry here.
+重连策略（第二阶段）：
+    sidecar 通过 loopback TCP 运行在同一台机器上；只有在 sidecar 崩溃时通道才会失效。
+    我们将 ``StreamEvents`` 暴露为异步迭代器，并让派发器决定如何处理 ``UNAVAILABLE`` 错误
+    （通常是停止运行并告知用户，不进行静默重试）。未来的里程碑可能会在此处添加自动退避重试机制。
 """
 
 from __future__ import annotations
@@ -46,8 +39,8 @@ from .exceptions import (
 )
 from .types import Account, Event, SendResult, event_from_proto
 
-# RPC operation tag for RPC-aware error translation.
-# Keep this list in sync with Transport methods that call _translate().
+# 用于 RPC 相关错误转换的 RPC 操作标记。
+# 请保持此列表与调用 _translate() 的 Transport 方法同步。
 RpcOp = Literal[
     "ping",
     "ensure_account",
@@ -63,10 +56,10 @@ if TYPE_CHECKING:
     pass
 
 
-# Phase 1 wire contract; bumped when the proto changes incompatibly.
+# 第一阶段通信协议版本；当 proto 发生不兼容变更时增加。
 PROTOCOL_VERSION = 1
 
-# Default deadline for unary RPCs (seconds). StreamEvents has no deadline.
+# 一元 RPC 的默认截止时间（秒）。StreamEvents 没有截止时间。
 DEFAULT_DEADLINE = 30.0
 
 
@@ -81,52 +74,49 @@ def _translate(
     op: RpcOp,
     account_key: str | None = None,
 ) -> Exception:
-    """Map a gRPC error to a FastMeow exception, RPC-aware.
+    """将 gRPC 错误映射为 FastMeow 异常（识别 RPC 类型）。
 
-    Status code conventions used by the Go sidecar (Phase 1):
-        * INVALID_ARGUMENT  -> bad request shape (e.g. missing JID)
-        * NOT_FOUND         -> unknown account_key
-        * ALREADY_EXISTS    -> account_key registered with a different JID
-        * FAILED_PRECONDITION -> protocol mismatch (handshake) /
-          wrong account state (lifecycle RPCs)
-        * UNAVAILABLE       -> sidecar crashed / channel closed
-        * INTERNAL          -> bug in the sidecar
+    Go sidecar 使用的状态码约定（第一阶段）：
+        * INVALID_ARGUMENT    -> 请求格式错误（例如缺少 JID）
+        * NOT_FOUND           -> 未知的 account_key
+        * ALREADY_EXISTS      -> account_key 已注册到不同的 JID
+        * FAILED_PRECONDITION -> 协议版本不匹配（握手）/ 账号状态错误（生命周期 RPC）
+        * UNAVAILABLE         -> sidecar 崩溃 / 通道关闭
+        * INTERNAL            -> sidecar 内部 bug
 
-    The ``op`` tag disambiguates codes that mean different things on
-    different RPCs. The most important examples:
-        * ``FAILED_PRECONDITION`` on ``ping``  -> SidecarStartupError
-        * ``FAILED_PRECONDITION`` on lifecycle -> AccountError
-        * ``INVALID_ARGUMENT`` on ``send_message`` -> MessageSendError
-        * ``INVALID_ARGUMENT`` elsewhere       -> ConfigurationError /
-          InvalidJIDError
+    ``op`` 标记用于区分在不同 RPC 中含义不同的状态码。最重要的示例：
+        * ``ping`` 上的 ``FAILED_PRECONDITION``      -> SidecarStartupError
+        * 生命周期 RPC 上的 ``FAILED_PRECONDITION`` -> AccountError
+        * ``send_message`` 上的 ``INVALID_ARGUMENT`` -> MessageSendError
+        * 其他位置的 ``INVALID_ARGUMENT``           -> ConfigurationError / InvalidJIDError
     """
     code = exc.code()
     detail = exc.details() or ""
 
-    # Channel-level failures: same regardless of op.
+    # 通道级故障：与具体 op 无关。
     if code == grpc.StatusCode.UNAVAILABLE:
         return SidecarCrashedError(f"sidecar unavailable: {detail}")
 
-    # NOT_FOUND / ALREADY_EXISTS are account-shaped on every account RPC.
+    # NOT_FOUND / ALREADY_EXISTS 在每个账号相关的 RPC 中都与账号有关。
     if code == grpc.StatusCode.NOT_FOUND:
         return AccountNotFoundError(detail or (account_key or ""))
     if code == grpc.StatusCode.ALREADY_EXISTS:
         return AccountAlreadyExistsError(detail or (account_key or ""))
 
     if code == grpc.StatusCode.FAILED_PRECONDITION:
-        # Handshake: protocol version mismatch.
+        # 握手：协议版本不匹配。
         if op in ("ping", "shutdown"):
             return SidecarStartupError(f"precondition failed: {detail}")
-        # Lifecycle / send: account is in the wrong state for this RPC.
+        # 生命周期 / 发送：账号当前状态无法执行此 RPC。
         return AccountError(f"{op}: precondition failed: {detail}")
 
     if code == grpc.StatusCode.INVALID_ARGUMENT:
-        # JID parse / unsupported server is its own subclass.
+        # JID 解析失败或服务器不支持。
         if "jid" in detail.lower():
             return InvalidJIDError(detail)
         if op == "send_message":
             return MessageSendError(detail)
-        # Bad request shape on a non-send RPC = caller-side configuration.
+        # 非发送类 RPC 的请求格式错误 = 调用方配置问题。
         return ConfigurationError(f"{op}: invalid argument: {detail}")
 
     return TransportError(f"{op}: {code.name}: {detail}")
@@ -138,12 +128,11 @@ def _translate(
 
 
 class Transport:
-    """Typed facade over the GatewayService gRPC stub.
+    """GatewayService gRPC stub 的类型化门面。
 
-    Construct via :func:`connect`; do not instantiate directly.
+    请通过 :func:`connect` 构建；请勿直接实例化。
 
-    All methods raise FastMeow exceptions on failure -- never raw
-    ``grpc.aio.AioRpcError``.
+    所有方法在失败时都会抛出 FastMeow 异常 —— 绝不会直接抛出 ``grpc.aio.AioRpcError``。
     """
 
     def __init__(
@@ -163,10 +152,10 @@ class Transport:
         self.whatsmeow_version = whatsmeow_version
         self.sidecar_id = sidecar_id
 
-    # -- lifecycle ----------------------------------------------------------
+    # -- 生命周期 ----------------------------------------------------------
 
     async def close(self) -> None:
-        """Close the underlying gRPC channel."""
+        """关闭底层的 gRPC 通道。"""
         await self._channel.close()
 
     # -- RPCs ---------------------------------------------------------------
@@ -178,10 +167,10 @@ class Transport:
         display_name: str = "",
         jid: str = "",
     ) -> tuple[Account, bool]:
-        """Register / load an account. Returns ``(state, created)``.
+        """注册 / 加载账号。返回 ``(state, created)``。
 
-        ``jid`` empty  -> create a new device, expect QR pairing.
-        ``jid`` set    -> load the existing device (must match manifest).
+        ``jid`` 为空  -> 创建新设备，需进行二维码配对。
+        ``jid`` 已设置 -> 加载现有设备（必须与 manifest 清单匹配）。
         """
         req = pb.EnsureAccountRequest(account_key=account_key, display_name=display_name, jid=jid)
         try:
@@ -193,7 +182,7 @@ class Transport:
         return Account.from_proto(resp.state), bool(resp.created)
 
     async def connect(self, account_key: str) -> Account:
-        """Bring an account online. Idempotent."""
+        """使账号上线。幂等。"""
         try:
             resp: pb.ConnectResponse = await self._stub.Connect(
                 pb.ConnectRequest(account_key=account_key),
@@ -204,7 +193,7 @@ class Transport:
         return Account.from_proto(resp.state)
 
     async def disconnect(self, account_key: str) -> Account:
-        """Take an account offline without logging out."""
+        """使账号下线但不退出登录。"""
         try:
             resp: pb.DisconnectResponse = await self._stub.Disconnect(
                 pb.DisconnectRequest(account_key=account_key),
@@ -215,7 +204,7 @@ class Transport:
         return Account.from_proto(resp.state)
 
     async def logout(self, account_key: str) -> Account:
-        """Log the device out of WhatsApp (revokes server-side session)."""
+        """注销设备在 WhatsApp 的登录（撤销服务器端会话）。"""
         try:
             resp: pb.LogoutResponse = await self._stub.Logout(
                 pb.LogoutRequest(account_key=account_key),
@@ -234,12 +223,12 @@ class Transport:
         client_msg_id: str | None = None,
         reply_to_message_id: str | None = None,
     ) -> SendResult:
-        """Send a text message.
+        """发送文本消息。
 
-        ``client_msg_id`` enables idempotent retry. If omitted, FastMeow
-        generates a fresh UUID4 per call so two sends never collide on
-        the dedup key. Pass an explicit value when *you* want retry
-        idempotency across reconnects.
+        ``client_msg_id`` 可实现幂等重试。如果省略，FastMeow
+        在每次调用时都会生成一个新的 UUID4，因此两次发送绝不会在
+        去重键上发生碰撞。当 *你* 希望在重连时保持重试幂等性时，
+        请传入一个显式的值。
         """
         effective_client_msg_id = client_msg_id or str(uuid4())
         text = pb.TextBody(body=body, reply_to_message_id=reply_to_message_id or "")
@@ -263,11 +252,11 @@ class Transport:
         include_soft_events: bool = False,
         resume_after_seq: int = 0,
     ) -> AsyncIterator[Event]:
-        """Subscribe to the sidecar event bus.
+        """订阅 sidecar 事件总线。
 
-        Yields events translated from the proto envelope. The stream ends
-        when the channel closes (clean shutdown) or raises
-        ``SidecarCrashedError`` if the sidecar dies mid-stream.
+        产出从 proto 信封转换而来的事件。当通道关闭（优雅关闭）时
+        流结束；如果 sidecar 在流运行期间异常终止，则抛出
+        ``SidecarCrashedError``。
         """
         req = pb.StreamEventsRequest(
             include_soft_events=include_soft_events,
@@ -280,32 +269,31 @@ class Transport:
                 if event is not None:
                     yield event
         except grpc.aio.AioRpcError as exc:
-            # Sidecar going down during shutdown looks like CANCELLED;
-            # surface it cleanly so the dispatcher can exit its loop.
+            # sidecar 在关闭期间退出会产生 CANCELLED 错误；
+            # 对其进行平滑处理，以便派发器可以退出循环。
             if exc.code() == grpc.StatusCode.CANCELLED:
                 return
             raise _translate(exc, op="stream_events") from exc
 
     async def shutdown(self, *, grace_ms: int = 0) -> None:
-        """Ask the sidecar to drain in-flight RPCs and exit.
+        """请求 sidecar 清理运行中的 RPC 并退出。
 
-        The supervisor process-level stop is the source of truth; this
-        RPC is a polite request that lets the sidecar log
-        ``shutdown trigger=rpc`` for diagnostics.
+        监督器的进程级停止是最终标准；此 RPC 是一个礼貌性请求，
+        允许 sidecar 记录 ``shutdown trigger=rpc`` 以供诊断。
         """
         try:
             await self._stub.Shutdown(
                 pb.ShutdownRequest(grace_ms=grace_ms), timeout=DEFAULT_DEADLINE
             )
         except grpc.aio.AioRpcError as exc:
-            # UNAVAILABLE on shutdown is expected: server already gone.
+            # 在关闭时出现 UNAVAILABLE 是预期的：服务器已关闭。
             if exc.code() in (grpc.StatusCode.UNAVAILABLE, grpc.StatusCode.CANCELLED):
                 return
             raise _translate(exc, op="shutdown") from exc
 
 
 # ---------------------------------------------------------------------------
-# Connect helper
+# 连接助手
 # ---------------------------------------------------------------------------
 
 
@@ -315,18 +303,16 @@ async def connect(
     expected_protocol_version: int = PROTOCOL_VERSION,
     handshake_timeout: float = 10.0,
 ) -> Transport:
-    """Open a channel to the sidecar and verify the protocol version.
+    """打开与 sidecar 的通道并验证协议版本。
 
-    ``addr`` is the ``host:port`` string the supervisor surfaces from the
-    ``listening`` event. We do a Ping RPC immediately so a version
-    mismatch fails fast, before any user code touches the channel.
+    ``addr`` 是监督器从 ``listening`` 事件中提取的 ``host:port`` 字符串。
+    我们立即执行 Ping RPC 以确保版本不匹配时能快速失败，避免用户代码触及通道。
     """
     options = [
         ("grpc.max_send_message_length", 16 * 1024 * 1024),
         ("grpc.max_receive_message_length", 16 * 1024 * 1024),
-        # Reasonable keepalive for a loopback channel; whatsmeow
-        # itself runs over its own network connection so this only
-        # matters when the sidecar wedges.
+        # 适用于回环通道的合理保活设置；whatsmeow 本身通过
+        # 自己的网络连接运行，因此这仅在 sidecar 卡死时起作用。
         ("grpc.keepalive_time_ms", 30_000),
         ("grpc.keepalive_timeout_ms", 10_000),
     ]
@@ -359,7 +345,7 @@ async def connect(
     )
 
 
-# Helper for tests/dispatcher: build a Timestamp without leaking the proto type.
+# 用于测试/派发器的助手：在不泄露 proto 类型的情况下构建 Timestamp。
 def _now_timestamp() -> Timestamp:  # pragma: no cover
     ts = Timestamp()
     ts.GetCurrentTime()

@@ -1,6 +1,6 @@
-"""FastMeow: a Pythonic SDK for WhatsApp automation.
+"""FastMeow: 为 WhatsApp 自动化设计的 Pythonic SDK。
 
-Quick start::
+快速开始::
 
     from fastmeow import FastMeow, Router, F
 
@@ -17,10 +17,9 @@ Quick start::
             await handle.ready()
             await app.run_forever()
 
-The package re-exports the curated public surface here so downstream
-code can ``from fastmeow import X`` without reaching into private
-submodules. Anything not listed in ``__all__`` is implementation detail
-and may change between versions.
+本包在此处重新导出精选的公开接口，以便下游代码可以直接执行 ``from fastmeow import X``，
+而无需深入私有子模块。任何未列入 ``__all__`` 的内容均为实现细节，
+可能会在不同版本之间发生变化。
 """
 
 from __future__ import annotations
@@ -67,23 +66,23 @@ from .types import (
 
 __version__ = "0.1.0"
 
-__all__ = [  # noqa: RUF022  -- grouped by domain, not alphabetical
-    # core app
+__all__ = [  # noqa: RUF022  -- 按领域分组，非字母序
+    # 核心应用
     "FastMeow",
     "AccountHandle",
-    # routing
+    # 路由
     "Router",
     "SkipHandler",
     "F",
     "Filter",
     "FilterResult",
-    # context
+    # 上下文
     "Ctx",
     "AccountClient",
-    # account
+    # 账号
     "Account",
     "AccountState",
-    # events
+    # 事件
     "Event",
     "MessageEvent",
     "ConnectedEvent",
@@ -93,7 +92,7 @@ __all__ = [  # noqa: RUF022  -- grouped by domain, not alphabetical
     "QREvent",
     "UnknownEvent",
     "SendResult",
-    # exceptions (full hierarchy)
+    # 异常 (完整层级)
     "FastMeowError",
     "ConfigurationError",
     "ManifestError",
@@ -114,6 +113,6 @@ __all__ = [  # noqa: RUF022  -- grouped by domain, not alphabetical
     "BackpressureError",
     "HandlerSignatureError",
     "ReplyNotAvailableError",
-    # version
+    # 版本
     "__version__",
 ]

@@ -1,21 +1,18 @@
-// Package sessions wraps whatsmeow's sqlstore.Container with FastMeow-specific
-// defaults: a single SQLite file (main.sqlite) opened in WAL mode with
-// foreign keys and a generous busy timeout, suitable for hosting many
-// concurrent whatsmeow.Client devices in one process.
+// Package sessions 封装了 whatsmeow 的 sqlstore.Container，并应用了 FastMeow 特定的
+// 默认设置：单个 SQLite 文件 (main.sqlite)，以 WAL 模式打开，启用外键约束和
+// 宽松的 busy timeout，适用于在单个进程中托管多个并发的 whatsmeow.Client 设备。
 //
-// Design notes:
-//   - Driver is modernc.org/sqlite (registered as "sqlite"), not mattn's
-//     "sqlite3". Pure-Go => no cgo => trivial cross-compilation for the
-//     wheel's per-platform sidecar binaries.
-//   - The container is shared by every whatsmeow.Client in the sidecar.
-//     whatsmeow's own access patterns are append-mostly with short
-//     transactions, so a single connection pool with WAL handles 100+
-//     accounts comfortably. If contention shows up under load we can swap
-//     this for sharded containers without touching account/event code.
-//   - We do NOT keep an account_key -> JID mapping here. That mapping
-//     lives in the Python supervisor's manifest.json, which is the single
-//     source of truth for "which business identifier owns which device".
-//     The sidecar only sees JIDs (or nil for fresh pair flows).
+// 设计说明：
+//   - 驱动程序使用 modernc.org/sqlite（注册名为 "sqlite"），而非 mattn 的
+//     "sqlite3"。纯 Go 实现 => 无需 cgo => 方便为不同平台的 sidecar 二进制文件
+//     进行交叉编译。
+//   - 该容器由 sidecar 中的每个 whatsmeow.Client 共享。
+//     whatsmeow 自身的访问模式主要是追加操作且事务较短，因此具有 WAL 的
+//     单个连接池可以轻松处理 100 多个账号。如果在高负载下出现竞争，
+//     我们可以在不触动账号/事件代码的情况下将其更换为分片容器。
+//   - 我们在此处不保留 账号 / account_key -> JID 的映射。该映射
+//     存在于 Python 管理器的 manifest.json 中，它是“哪个业务标识符拥有哪个设备”的
+//     唯一事实来源。sidecar 仅处理 JID（对于新配对流程则为 nil）。
 package sessions
 
 import (
@@ -30,25 +27,23 @@ import (
 	"go.mau.fi/whatsmeow/types"
 	waLog "go.mau.fi/whatsmeow/util/log"
 
-	// Register the pure-Go SQLite driver under the name "sqlite".
+	// 将纯 Go SQLite 驱动程序注册到 "sqlite" 名称下。
 	_ "modernc.org/sqlite"
 )
 
-// Store is a thin wrapper over *sqlstore.Container that hides the DSN
-// construction details and exposes only the operations the rest of the
-// sidecar needs.
+// Store 是对 *sqlstore.Container 的轻量级封装，隐藏了 DSN
+// 构建细节，仅公开 sidecar 其余部分所需的各种操作。
 type Store struct {
 	container *sqlstore.Container
 	dbPath    string
 }
 
-// Open creates (or opens) the SQLite database at dbPath and runs whatsmeow's
-// schema migrations. The parent directory is created with 0700 because the
-// file contains end-to-end encryption key material.
+// Open 在 dbPath 处创建（或打开）SQLite 数据库并运行 whatsmeow 的
+// 数据库迁移。父目录以 0700 权限创建，因为该文件包含端到端加密密钥材料。
 //
-// dbPath is a filesystem path, NOT a SQLite DSN. We build the DSN ourselves
-// to enforce the pragmas we care about and to keep callers from accidentally
-// disabling WAL.
+// dbPath 是文件系统路径，而不是 SQLite DSN。我们自行构建 DSN
+// 以强制执行我们关注的编译指令（pragmas），并防止调用方意外
+// 禁用 WAL。
 func Open(ctx context.Context, dbPath string, log waLog.Logger) (*Store, error) {
 	if dbPath == "" {
 		return nil, fmt.Errorf("sessions: dbPath is required")
@@ -69,46 +64,41 @@ func Open(ctx context.Context, dbPath string, log waLog.Logger) (*Store, error) 
 	return &Store{container: container, dbPath: dbPath}, nil
 }
 
-// Close releases the underlying database handle. Callers should disconnect
-// every whatsmeow.Client before calling Close to avoid mid-transaction
-// errors from background writes.
+// Close 释放底层数据库句柄。调用方在调用 Close 之前应断开
+// 每个 whatsmeow.Client 的连接，以避免后台写入导致事务中途出错。
 func (s *Store) Close() error {
 	if s == nil || s.container == nil {
 		return nil
 	}
-	// sqlstore.Container has no public Close at the moment, but the
-	// underlying *sql.DB is reachable via reflection-free interface
-	// assertion. To stay forward-compatible we just drop the reference;
-	// the *sql.DB will be GC-finalised. If sqlstore later gains a Close()
-	// we'll wire it here without changing callers.
+	// sqlstore.Container 目前没有公开的 Close 方法，但可以通过
+	// 无反射的接口断言获取底层的 *sql.DB。为了保持向前兼容，
+	// 我们仅删除引用；*sql.DB 将由 GC 回收。如果 sqlstore
+	// 以后增加了 Close()，我们将在此处接入而无需更改调用方。
 	s.container = nil
 	return nil
 }
 
-// Path returns the on-disk path of the sqlite file. Useful for log lines
-// and for the manifest persistence layer (so it can record store_path
-// alongside each account).
+// Path 返回 sqlite 文件的磁盘路径。适用于日志行
+// 和清单（manifest）持久化层（以便它可以将 store_path
+// 与每个账号一起记录）。
 func (s *Store) Path() string { return s.dbPath }
 
-// Container exposes the raw *sqlstore.Container for code paths that need
-// it (notably whatsmeow.NewClient takes a *store.Device produced by the
-// container). Keep usage of this method narrow; prefer the typed helpers
-// below for new code.
+// Container 为需要它的代码路径公开原始的 *sqlstore.Container
+// （特别是 whatsmeow.NewClient 需要由容器生成的 *store.Device）。
+// 请保持此方法的窄调用；新代码优先选择下面的类型化辅助函数。
 func (s *Store) Container() *sqlstore.Container { return s.container }
 
-// LoadOrCreateDevice returns a *store.Device suitable for handing to
-// whatsmeow.NewClient.
+// LoadOrCreateDevice 返回适用于传递给 whatsmeow.NewClient 的 *store.Device。
 //
-//   - If jid is the zero value, we always allocate a fresh, unpaired
-//     device. The caller is expected to drive it through GetQRChannel +
-//     Connect to obtain a real JID via PairSuccess.
-//   - If jid is non-zero, we look up the persisted device. If it exists,
-//     the returned *store.Device carries all the prekeys and identity
-//     state needed to resume without re-pairing. If it does NOT exist,
-//     we return an error rather than silently creating a new one — a
-//     missing device for a known JID means the manifest and the SQLite
-//     file have drifted, which the supervisor must surface, not paper
-//     over.
+//   - 如果 jid 为零值，我们总是分配一个新的、未配对的
+//     设备。调用方预计通过 GetQRChannel + Connect 进行驱动，
+//     以通过 PairSuccess 获取真实的 JID。
+//   - 如果 jid 非零，我们查找持久化的设备。如果它存在，
+//     返回的 *store.Device 携带了恢复连接所需的所有 prekeys 和身份
+//     状态，无需重新配对。如果它不存在，
+//     我们返回错误而不是静默创建一个新设备 —— 已知 JID 的设备
+//     缺失意味着清单（manifest）和 SQLite 文件已发生偏差，
+//     管理器必须将此情况暴露出来，而不是掩盖它。
 func (s *Store) LoadOrCreateDevice(ctx context.Context, jid types.JID) (*store.Device, error) {
 	if jid.IsEmpty() {
 		return s.container.NewDevice(), nil
@@ -123,8 +113,8 @@ func (s *Store) LoadOrCreateDevice(ctx context.Context, jid types.JID) (*store.D
 	return dev, nil
 }
 
-// DeleteDevice removes the persisted state for jid. Used by RemoveAccount.
-// Returns nil if the device is already absent (idempotent).
+// DeleteDevice 移除 jid 的持久化状态。由 RemoveAccount 使用。
+// 如果设备已缺失，则返回 nil（幂等）。
 func (s *Store) DeleteDevice(ctx context.Context, jid types.JID) error {
 	if jid.IsEmpty() {
 		return nil
@@ -142,24 +132,23 @@ func (s *Store) DeleteDevice(ctx context.Context, jid types.JID) error {
 	return nil
 }
 
-// buildDSN composes a modernc.org/sqlite DSN with the pragmas we want
-// applied to every connection in the pool.
+// buildDSN 组合了一个 modernc.org/sqlite DSN，并将我们期望的
+// 编译指令（pragmas）应用于连接池中的每个连接。
 //
-//   - foreign_keys=on: whatsmeow's schema relies on FK cascades for
-//     identity/session cleanup.
-//   - journal_mode=WAL: required for many-account concurrency. Without
-//     it, every prekey rotation serialises writers behind readers.
-//   - busy_timeout=10000: 10s is well above any healthy whatsmeow write,
-//     but high enough to ride out a brief WAL checkpoint stall instead
-//     of returning SQLITE_BUSY to the caller.
-//   - synchronous=NORMAL: WAL's default; keeping it explicit so a future
-//     driver upgrade that flips defaults can't silently regress us to
-//     FULL (slow) or OFF (data-loss risk on crash).
+//   - foreign_keys=on: whatsmeow 的架构依赖于外键级联来进行
+//     身份/会话清理。
+//   - journal_mode=WAL: 多个账号并发所必需的。如果没有它，
+//     每次 prekey 轮换都会使写入者在读取者之后串行化。
+//   - busy_timeout=10000: 10s 远高于任何正常的 whatsmeow 写入时间，
+//     但足以度过短暂的 WAL 检查点停顿，而不是向调用方返回 SQLITE_BUSY。
+//   - synchronous=NORMAL: WAL 的默认值；保持显式设置，以便未来
+//     驱动程序升级改变默认值时，不会静默地将我们退回到
+//     FULL（慢）或 OFF（崩溃时有数据丢失风险）。
 func buildDSN(dbPath string) string {
-	// modernc.org/sqlite parses URIs of the form `file:<path>?<query>`.
-	// On Windows, paths contain backslashes which url.Values.Encode()
-	// would percent-escape badly, so we hand-build the query string.
-	// The path itself is passed through filepath.ToSlash for portability.
+	// modernc.org/sqlite 解析 `file:<path>?<query>` 形式的 URI。
+	// 在 Windows 上，路径包含反斜杠，url.Values.Encode()
+	// 会对其进行错误的百分比转义，因此我们手动构建查询字符串。
+	// 路径本身通过 filepath.ToSlash 进行转换以保证移植性。
 	pragmas := url.Values{}
 	pragmas.Add("_pragma", "foreign_keys(on)")
 	pragmas.Add("_pragma", "journal_mode(WAL)")

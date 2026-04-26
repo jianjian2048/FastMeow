@@ -1,44 +1,43 @@
-// Package events translates whatsmeow event types into the proto
-// StreamEventsResponse wire format and multiplexes them onto a single
-// process-wide channel for the gRPC StreamEvents server-stream.
+// Package events 将 whatsmeow 的事件类型转换为 proto
+// StreamEventsResponse 的传输格式，并将它们复用到单个
+// 进程范围的通道，用于 gRPC StreamEvents 服务端流。
 //
-// Architecture
+// 架构
 //
-// One Bus per sidecar process. Every whatsmeow.Client registered through
-// the accounts package has its event handler routed into bus.Sink, which:
+// 每个 sidecar 进程拥有一个 Bus（事件总线）。通过 accounts 包注册的
+// 每个 whatsmeow.Client 都会将其事件处理程序路由到 bus.Sink，它会执行：
 //
-//  1. assigns a monotonically-increasing seq number,
-//  2. stamps observed_at,
-//  3. translates the Go event to the proto oneof,
-//  4. enqueues onto a single bounded channel.
+//  1. 分配一个单调递增的序号（seq），
+//  2. 标记观测时间（observed_at），
+//  3. 将 Go 事件翻译为 proto 的 oneof 类型，
+//  4. 入队到单个有界通道中。
 //
-// Phase 1 deliberately supports exactly one StreamEvents subscriber per
-// sidecar — the Python supervisor — matching the proto comment
-// ("Python opens exactly one StreamEvents call per sidecar"). A second
-// concurrent Subscribe panics rather than silently splitting events.
+// 第一阶段（Phase 1）特意只支持每个 sidecar 拥有一个 StreamEvents 订阅者
+// —— 即 Python 管理器 —— 这与 proto 中的注释相匹配
+// （"Python 每个 sidecar 正好开启一个 StreamEvents 调用"）。第二次并发的
+// Subscribe 会引发 panic，而不是静默地拆分事件。
 //
-// Backpressure
+// 背压（Backpressure）
 //
-// The bus channel is bounded (default 1024). On overflow we drop the
-// INCOMING event and emit a warning log line. We deliberately do NOT
-// block whatsmeow's dispatch goroutine: blocking it stalls every other
-// account's event delivery. The drop-newest policy is acceptable in
-// Phase 1 because:
+// 事件总线通道是有界的（默认 1024）。在溢出时，我们会丢弃
+// 传入的事件并输出一条警告日志。我们特意不阻塞
+// whatsmeow 的派发 goroutine：阻塞它会导致
+// 每个其他账号的事件递送发生停顿。丢弃最新数据的策略
+// 在第一阶段是可以接受的，因为：
 //
-//  - We do not subscribe to soft events (presence/receipts), so
-//    the channel only carries connection-state changes and inbound
-//    messages, both of which are low-volume.
-//  - Inbound messages are already delivered with at-most-once semantics
-//    by whatsmeow itself; a Python-side reconciliation pass on reconnect
-//    is the right way to recover from drops, not infinite buffering here.
+//   - 我们没有订阅软状态事件（presence/receipts），
+//     因此通道仅携带连接状态变化和收到的消息，
+//     这两者的容量都很低。
+//   - 收到的消息本身已经由 whatsmeow 以至多一次（at-most-once）
+//     的语义进行递送；重连时在 Python 端进行对账
+//     是恢复丢弃事件的正确方式，而不是在此处进行无限缓冲。
 //
-// QR pairing
+// # QR 配对
 //
-// QR codes do NOT come through AddEventHandler — whatsmeow exposes them
-// via Client.GetQRChannel(ctx) which returns a typed channel of
-// QRChannelItem. PumpQRChannel bridges that into the bus so subscribers
-// see qr / pair_success / disconnected events through the same wire path
-// as everything else.
+// QR 码并不通过 AddEventHandler 传递 —— whatsmeow 通过
+// Client.GetQRChannel(ctx) 暴露它们，该方法返回一个 QRChannelItem 的
+// 类型化通道。PumpQRChannel 将其接入到事件总线，以便订阅者
+// 能通过与其它事件相同的路径看到 qr / pair_success / disconnected 事件。
 package events
 
 import (
@@ -58,37 +57,37 @@ import (
 	pb "github.com/jianjian2048/fastmeow/gen/go/fastmeow/v1"
 )
 
-// DefaultBufferSize is the depth of the bus channel. Sized for ~1 second
-// of bursty inbound traffic across all accounts before we start dropping.
+// DefaultBufferSize 是事件总线通道的深度。大小设定为能够承载
+// 所有账号约 1 秒钟的突发入站流量，然后才会开始丢弃。
 const DefaultBufferSize = 1024
 
-// Bus is the single fan-in/fan-out point for sidecar-wide event flow.
+// Bus 是整个 sidecar 范围内事件流的唯一汇聚/分发点。
 type Bus struct {
 	sidecarID string
 	log       waLog.Logger
 
-	// out is the only channel; subscribed exactly once.
+	// out 是唯一的通道；正好被订阅一次。
 	out chan *pb.StreamEventsResponse
 
-	// seq is the monotonic counter assigned to every emitted event.
+	// seq 是分配给每个发出的事件的单调递增计数器。
 	seq atomic.Uint64
 
-	// subscribed flips true on the first Subscribe call. Second call panics.
+	// subscribed 在第一次 Subscribe 调用时变为 true。第二次调用将 panic。
 	subscribed atomic.Bool
 
-	// jids holds the most recently observed JID per account_key, so we
-	// can stamp account_jid on every outgoing event without forcing the
-	// caller to plumb it through. Updated on PairSuccess.
+	// jids 保存每个 account_key 最近观测到的 JID，以便我们
+	// 可以在每个发出的事件上标记 account_jid，而无需强制
+	// 调用方进行传递。在 PairSuccess 时更新。
 	jidsMu sync.RWMutex
 	jids   map[string]string
 
-	// dropCount is incremented every time we drop an event due to a
-	// full out channel. Logged periodically so the operator notices.
+	// dropCount 在由于 out 通道已满而丢弃事件时递增。
+	// 定期记录日志以便运维人员察觉。
 	dropCount atomic.Uint64
 }
 
-// NewBus constructs a Bus. sidecarID is stamped onto every event for
-// future sharded mode; pass "default" in single mode.
+// NewBus 构造一个 Bus。sidecarID 会被标记在每个事件上，用于
+// 未来的分片模式；在单一模式下传入 "default"。
 func NewBus(sidecarID string, bufferSize int, log waLog.Logger) *Bus {
 	if bufferSize <= 0 {
 		bufferSize = DefaultBufferSize
@@ -104,10 +103,9 @@ func NewBus(sidecarID string, bufferSize int, log waLog.Logger) *Bus {
 	}
 }
 
-// Subscribe returns the read end of the bus channel. May be called
-// exactly once per Bus lifetime; a second call panics, since splitting
-// the stream silently between two consumers would lose half the events
-// for each.
+// Subscribe 返回事件总线通道的读取端。每个 Bus 生命周期中
+// 正好可以调用一次；第二次调用会 panic，因为在两个
+// 消费者之间静默地拆分流会导致每个消费者都丢失一半的事件。
 func (b *Bus) Subscribe() <-chan *pb.StreamEventsResponse {
 	if !b.subscribed.CompareAndSwap(false, true) {
 		panic("events.Bus.Subscribe called more than once; only one StreamEvents subscriber is supported")
@@ -115,40 +113,38 @@ func (b *Bus) Subscribe() <-chan *pb.StreamEventsResponse {
 	return b.out
 }
 
-// Close shuts the bus down. After Close, Sink is a no-op and the
-// subscribed channel is closed (which terminates the gRPC server-stream
-// cleanly with EOF).
+// Close 关闭总线。在 Close 之后，Sink 是一个空操作，并且
+// 被订阅的通道会被关闭（这会以 EOF 清洁地终止 gRPC 服务端流）。
 func (b *Bus) Close() {
 	defer func() {
-		// out may already be closed if Close is called twice; recover
-		// to keep the call idempotent.
+		// 如果 Close 被调用两次，out 可能已经关闭；
+		// 通过 recover 来保持调用的幂等性。
 		_ = recover()
 	}()
 	close(b.out)
 }
 
-// Sink is the EventSink callback the accounts package attaches to every
-// whatsmeow.Client. It is called synchronously from whatsmeow's
-// dispatchEvent goroutine, so it must NEVER block.
+// Sink 是 accounts 包附加到每个 whatsmeow.Client 的 EventSink 回调。
+// 它由 whatsmeow 的 dispatchEvent goroutine 同步调用，
+// 因此绝不能阻塞。
 func (b *Bus) Sink(accountKey string, evt any) {
 	resp := b.translate(accountKey, evt)
 	if resp == nil {
 		return
 	}
-	// Update cached JID before emit so the outgoing message carries it.
+	// 在发出之前更新缓存的 JID，以便发出的消息携带它。
 	if ps, ok := evt.(*events.PairSuccess); ok {
 		b.setJID(accountKey, ps.ID.String())
-		// Re-stamp now that we know the JID.
+		// 现在知道了 JID，重新进行标记。
 		resp.AccountJid = ps.ID.String()
 	}
 	b.emit(resp)
 }
 
-// PumpQRChannel reads QRChannelItem values from a whatsmeow QR channel
-// and forwards them onto the bus until the channel closes or ctx is
-// cancelled. Intended to be launched in its own goroutine immediately
-// after Client.GetQRChannel returns (and BEFORE Client.Connect, per
-// whatsmeow's pairing protocol).
+// PumpQRChannel 从 whatsmeow 的 QR 通道读取 QRChannelItem 值，
+// 并将其转发到事件总线上，直到通道关闭或 ctx 被取消。旨在
+// 在 Client.GetQRChannel 返回之后（且根据 whatsmeow 的配对协议，
+// 在 Client.Connect 之前）立即在其自身的 goroutine 中启动。
 func (b *Bus) PumpQRChannel(ctx context.Context, accountKey string, qrCh <-chan whatsmeow.QRChannelItem) {
 	for {
 		select {
@@ -166,9 +162,9 @@ func (b *Bus) PumpQRChannel(ctx context.Context, accountKey string, qrCh <-chan 
 	}
 }
 
-// SetAccountJID lets the accounts package seed the JID cache for accounts
-// that are loaded from disk already paired (so the very first event they
-// emit after Connect carries account_jid). Optional.
+// SetAccountJID 让 accounts 包为已经配对并从磁盘加载的账号
+// 预置 JID 缓存（以便它们在 Connect 之后发出的第一个事件
+// 携带 account_jid）。可选。
 func (b *Bus) SetAccountJID(accountKey string, jid types.JID) {
 	if jid.IsEmpty() {
 		return
@@ -177,7 +173,7 @@ func (b *Bus) SetAccountJID(accountKey string, jid types.JID) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Internals
+// 内部实现
 // ─────────────────────────────────────────────────────────────────────────────
 
 func (b *Bus) emit(resp *pb.StreamEventsResponse) {
@@ -193,11 +189,11 @@ func (b *Bus) emit(resp *pb.StreamEventsResponse) {
 	select {
 	case b.out <- resp:
 	default:
-		// Channel full. Drop and log. We do NOT block whatsmeow's
-		// dispatch goroutine — see package comment.
+		// 通道已满。丢弃并记录日志。我们不阻塞 whatsmeow 的
+		// 派发 goroutine —— 参见包说明。
 		n := b.dropCount.Add(1)
-		// Log the first drop and every 100th after, to avoid log
-		// flooding when the subscriber is gone for a long time.
+		// 记录第一次丢弃以及之后的每 100 次丢弃，以避免在订阅者
+		// 长时间离开时导致日志泛滥。
 		if n == 1 || n%100 == 0 {
 			b.log.Warnf("events: bus full, dropped event seq=%d account=%q kind=%T (total dropped=%d)",
 				resp.Seq, resp.AccountKey, resp.Event, n)
@@ -217,8 +213,8 @@ func (b *Bus) getJID(accountKey string) string {
 	return b.jids[accountKey]
 }
 
-// translate maps a whatsmeow event to a *pb.StreamEventsResponse. Returns
-// nil for events we deliberately drop (Phase 1 ignores soft events).
+// translate 将 whatsmeow 事件映射为 *pb.StreamEventsResponse。
+// 对于我们特意丢弃的事件，返回 nil（第一阶段忽略软状态事件）。
 func (b *Bus) translate(accountKey string, evt any) *pb.StreamEventsResponse {
 	base := &pb.StreamEventsResponse{AccountKey: accountKey}
 
@@ -252,15 +248,14 @@ func (b *Bus) translate(accountKey string, evt any) *pb.StreamEventsResponse {
 	case *events.Message:
 		me := messageEvent(e)
 		if me == nil {
-			return nil // unsupported message type for Phase 1 (e.g. media-only)
+			return nil // 第一阶段不支持的消息类型（例如仅包含媒体）
 		}
 		base.Event = &pb.StreamEventsResponse_Message{Message: me}
 		return base
 
-	// Phase 1: explicitly drop these noisy soft-state events. They fire
-	// in bursts after pairing (history sync can emit dozens) and Python
-	// business code does not care about them in v1. Promoting any of
-	// these to first-class proto events is a future protocol bump.
+	// 第一阶段：显式丢弃这些嘈杂的软状态事件。它们在配对后会爆发式触发
+	// （历史同步可能会发出数十个），而在 v1 版本中 Python 业务代码并不关心它们。
+	// 将其中任何一个提升为一等 proto 事件是未来协议升级的内容。
 	case *events.HistorySync,
 		*events.OfflineSyncPreview,
 		*events.OfflineSyncCompleted,
@@ -275,10 +270,9 @@ func (b *Bus) translate(accountKey string, evt any) *pb.StreamEventsResponse {
 		return nil
 
 	default:
-		// Phase 1: surface unrecognised events as UnknownEvent so the
-		// Python side can see what's flowing without us having to
-		// translate every variant up front. Production wheel may
-		// switch this to a no-op behind a debug flag.
+		// 第一阶段：将无法识别的事件表现为 UnknownEvent，以便 Python 端
+		// 可以看到正在流动的事件，而无需我们预先翻译每一个变体。
+		// 生产环境的 wheel 可能会在调试标志位后将其切换为空操作。
 		base.Event = &pb.StreamEventsResponse_Unknown{
 			Unknown: &pb.UnknownEvent{GoType: fmt.Sprintf("%T", evt)},
 		}
@@ -286,9 +280,9 @@ func (b *Bus) translate(accountKey string, evt any) *pb.StreamEventsResponse {
 	}
 }
 
-// qrItemToResp translates a whatsmeow.QRChannelItem (the QR-channel
-// element type) into a StreamEventsResponse. Each item's Event field is
-// "code" / "success" / "timeout" / "err" per the upstream API.
+// qrItemToResp 将 whatsmeow.QRChannelItem（QR 通道元素类型）
+// 翻译为 StreamEventsResponse。根据上游 API，每个条目的 Event 字段
+// 为 "code" / "success" / "timeout" / "err"。
 func (b *Bus) qrItemToResp(accountKey string, item whatsmeow.QRChannelItem) *pb.StreamEventsResponse {
 	base := &pb.StreamEventsResponse{AccountKey: accountKey}
 
@@ -296,21 +290,20 @@ func (b *Bus) qrItemToResp(accountKey string, item whatsmeow.QRChannelItem) *pb.
 	case "code":
 		base.Event = &pb.StreamEventsResponse_Qr{
 			Qr: &pb.QREvent{
-				Code:        item.Code,
-				TtlSeconds:  uint32(item.Timeout / time.Second),
+				Code:       item.Code,
+				TtlSeconds: uint32(item.Timeout / time.Second),
 			},
 		}
 		return base
 
 	case "success":
-		// Pairing succeeded; whatsmeow will also emit *events.PairSuccess
-		// through the regular handler with the JID. We let that path
-		// emit the proto PairSuccessEvent so we don't double-deliver.
+		// 配对成功；whatsmeow 也会通过带有 JID 的常规处理程序发出 *events.PairSuccess。
+		// 我们让该路径发出 proto PairSuccessEvent，以便不进行重复递送。
 		return nil
 
 	case "timeout":
-		// QR timed out; surface as a Disconnected with reason so the
-		// Python side can present a "scan failed, try again" UI.
+		// QR 超时；表现为带原因的 Disconnected，以便 Python 端可以
+		// 呈现“扫描失败，请重试”的 UI。
 		base.Event = &pb.StreamEventsResponse_Disconnected{
 			Disconnected: &pb.DisconnectedEvent{Reason: "qr_timeout"},
 		}
@@ -331,15 +324,14 @@ func (b *Bus) qrItemToResp(accountKey string, item whatsmeow.QRChannelItem) *pb.
 	}
 }
 
-// messageEvent extracts the Phase 1 fields from *events.Message. Returns
-// nil if the message has no representable text body (e.g. it's an
-// image-only message; Phase 1 doesn't carry media).
+// messageEvent 从 *events.Message 中提取第一阶段所需的字段。
+// 如果消息没有可表示的文本主体（例如它是一个仅含图像的消息；
+// 第一阶段不携带媒体），则返回 nil。
 func messageEvent(e *events.Message) *pb.MessageEvent {
 	text, replyTo := extractText(e)
 	if text == "" && replyTo == "" {
-		// Pure non-text payload; skip for Phase 1 rather than emit
-		// an empty MessageEvent that the Python side would have to
-		// special-case.
+		// 纯非文本负载；在第一阶段跳过，而不是发出一个
+		// Python 端必须特殊处理的空 MessageEvent。
 		return nil
 	}
 	return &pb.MessageEvent{
@@ -354,10 +346,9 @@ func messageEvent(e *events.Message) *pb.MessageEvent {
 	}
 }
 
-// extractText pulls the displayable text + reply context out of a
-// *events.Message, looking in both the simple Conversation field and the
-// richer ExtendedTextMessage variant WhatsApp uses for replies, links
-// previews, etc.
+// extractText 从 *events.Message 中提取可显示的文本 + 回复上下文，
+// 同时查找简单的 Conversation 字段和 WhatsApp 用于回复、链接预览等的
+// 更丰富的 ExtendedTextMessage 变体。
 func extractText(e *events.Message) (text, replyTo string) {
 	if e == nil || e.Message == nil {
 		return "", ""
@@ -374,10 +365,9 @@ func extractText(e *events.Message) (text, replyTo string) {
 	return text, replyTo
 }
 
-// loggedOutReason renders an *events.LoggedOut into the free-form reason
-// string carried in the proto. We avoid leaking whatsmeow's internal
-// ConnectFailureReason enum values directly so changes upstream don't
-// quietly break our wire format.
+// loggedOutReason 将 *events.LoggedOut 渲染为 proto 中携带的自由格式
+// 原因字符串。我们避免直接泄露 whatsmeow 内部的 ConnectFailureReason
+// 枚举值，以免上游的变化静默地破坏我们的传输格式。
 func loggedOutReason(e *events.LoggedOut) string {
 	if e == nil {
 		return "logged_out"
@@ -388,7 +378,7 @@ func loggedOutReason(e *events.LoggedOut) string {
 	return "logged_out"
 }
 
-// errClosedBus is returned (currently unused) if a future caller asks
-// the bus for confirmation that emission succeeded after Close.
+// errClosedBus 如果未来调用方在 Close 之后向总线询问
+// 是否成功发出的确认，则返回该错误（目前未使用）。
 var errClosedBus = errors.New("events: bus closed")
 var _ = errClosedBus

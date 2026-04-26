@@ -1,26 +1,25 @@
-// fastmeow-smoketest is a single-binary harness for end-to-end Phase 1
-// validation: it spawns nothing — just dials a sidecar already started by
-// the operator — and walks one account through pairing + receive + reply.
+// fastmeow-smoketest 是用于第一阶段端到端验证的单二进制测试工具：
+// 它不启动任何进程 —— 仅连接由操作员启动的 sidecar —— 并引导一个
+// 账号完成配对 + 接收消息 + 回复消息的流程。
 //
-// Usage (two terminals):
+// 使用方法（两个终端）：
 //
-//	# Terminal A: start the sidecar
+//	# 终端 A：启动 sidecar
 //	./bin/fastmeow-sidecar.exe --listen tcp://127.0.0.1:50071 --session-dir ./smoke-sessions
 //
-//	# Terminal B: drive it
+//	# 终端 B：驱动测试
 //	./bin/fastmeow-smoketest.exe --addr 127.0.0.1:50071 --account-key smoke
 //
-// What it does:
-//  1. Ping (verifies protocol).
-//  2. EnsureAccount(account_key, jid="") → fresh device.
-//  3. StreamEvents in a goroutine, prints every event.
-//  4. Connect → triggers QR pump on the sidecar.
-//  5. On the first QREvent, render the QR in the terminal so you can scan
-//     with your test phone.
-//  6. On PairSuccess, print the bound JID.
-//  7. On the first inbound MessageEvent (not from_me), reply
-//     "👋 fastmeow phase 1 ack" using SendMessage with a fresh client_msg_id.
-//  8. After the reply succeeds, exit 0. Any unexpected error exits non-zero.
+// 具体流程：
+//  1. Ping（验证协议版本）。
+//  2. EnsureAccount(account_key, jid="") → 创建新设备。
+//  3. 在 goroutine 中执行 StreamEvents，打印每个事件。
+//  4. Connect → 触发 sidecar 上的 QR 码推送。
+//  5. 收到第一个 QREvent 时，在终端渲染 QR 码，以便你可以用测试手机扫码。
+//  6. 收到 PairSuccess 时，打印绑定的 JID。
+//  7. 收到第一个入站 MessageEvent（非 from_me）时，使用带有新
+//     client_msg_id 的 SendMessage 回复 "👋 fastmeow phase 1 ack"。
+//  8. 回复成功后，以状态码 0 退出。任何意外错误将以非零状态码退出。
 package main
 
 import (
@@ -74,7 +73,7 @@ func main() {
 	log.Printf("ping ok: sidecar=%s proto=%d sidecar_id=%s",
 		pingResp.GetSidecarVersion(), pingResp.GetServerProtocolVersion(), pingResp.GetSidecarId())
 
-	// 2. EnsureAccount (jid empty -> fresh device for QR pairing)
+	// 2. EnsureAccount (jid 为空 -> 为 QR 配对创建新设备)
 	ens, err := cli.EnsureAccount(ctx, &pb.EnsureAccountRequest{AccountKey: *accountKey})
 	if err != nil {
 		log.Fatalf("ensure: %v", err)
@@ -82,7 +81,7 @@ func main() {
 	log.Printf("ensure ok: created=%v state=%s jid=%q", ens.GetCreated(),
 		ens.GetState().GetState(), ens.GetState().GetJid())
 
-	// 3. StreamEvents in a goroutine. Channels signal milestones.
+	// 3. 在 goroutine 中执行 StreamEvents。通过 channel 发送关键信号。
 	stream, err := cli.StreamEvents(ctx, &pb.StreamEventsRequest{})
 	if err != nil {
 		log.Fatalf("stream: %v", err)
@@ -134,13 +133,13 @@ func main() {
 		}
 	}()
 
-	// 4. Connect (triggers QR pump on sidecar for unpaired devices)
+	// 4. Connect (对未配对设备触发 sidecar 上的 QR 码推送)
 	if _, err := cli.Connect(ctx, &pb.ConnectRequest{AccountKey: *accountKey}); err != nil {
 		log.Fatalf("connect: %v", err)
 	}
 	log.Printf("connect issued; waiting for QR / PairSuccess / Connected …")
 
-	// 5/6. Wait for paired + connected
+	// 5/6. 等待配对完成并连接成功
 	if err := waitFor(ctx, "paired", paired, streamErr); err != nil {
 		log.Fatalf("%v", err)
 	}
@@ -150,7 +149,7 @@ func main() {
 
 	log.Printf("READY. Now send any text message to this WhatsApp account from another phone.")
 
-	// 7. Wait for first inbound, then reply
+	// 7. 等待第一个入站消息，然后回复
 	var in inbound
 	select {
 	case <-ctx.Done():
@@ -175,7 +174,7 @@ func main() {
 	}
 	log.Printf("REPLY SENT id=%s deduped=%v", sendResp.GetMessageId(), sendResp.GetDeduped())
 
-	// Idempotency check: same client_msg_id should hit dedup cache.
+	// 幂等性检查：相同的 client_msg_id 应当命中重复检查缓存。
 	dup, err := cli.SendMessage(ctx, &pb.SendMessageRequest{
 		AccountKey:  *accountKey,
 		ToJid:       in.fromJID,
@@ -223,10 +222,10 @@ func renderQR(code string) {
 	}
 	fmt.Println()
 	fmt.Println("====== SCAN THIS QR WITH WHATSAPP ON YOUR TEST PHONE ======")
-	// Use whatsmeow's default Unicode block chars (qrterminal.BLACK / WHITE).
-	// Requires a UTF-8 capable terminal (Windows Terminal, or PowerShell with
-	// `chcp 65001` + a TrueType font). The QR is wide (~84 cols) — shrink
-	// your terminal font or widen the window if it wraps.
+	// 使用 whatsmeow 默认的 Unicode 块字符 (qrterminal.BLACK / WHITE)。
+	// 需要支持 UTF-8 的终端（Windows Terminal，或执行过 `chcp 65001` 并
+	// 使用 TrueType 字体的 PowerShell）。QR 码较宽（约 84 列）—— 如果
+	// 发生换行，请缩小终端字体或加宽窗口。
 	qrterminal.GenerateWithConfig(code, qrterminal.Config{
 		Level:     qrterminal.L,
 		Writer:    os.Stdout,

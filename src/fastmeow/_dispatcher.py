@@ -1,26 +1,21 @@
-"""Dispatcher: pumps Transport.stream_events() into Router.dispatch().
+"""派发器：将 Transport.stream_events() 泵入 Router.dispatch()。
 
-The dispatcher is the bridge between the wire (gRPC stream of proto
-envelopes) and user code (Router with handlers). Its responsibilities:
+派发器是线路层（proto 信封的 gRPC 流）与用户代码（带有处理器的 Router）之间的桥梁。
+其职责包括：
 
-    1. Maintain a single ``StreamEvents`` subscription on the Transport.
-    2. For every event, build a :class:`Ctx` whose ``client`` is bound
-       to the event's ``account_key``.
-    3. Hand ``(event, ctx)`` to ``Router.dispatch``.
-    4. Run handlers concurrently across accounts, but keep per-account
-       events strictly ordered (so a slow handler for account A does
-       not block account B, while two messages from account A still
-       run in arrival order).
-    5. Surface handler exceptions to a user-supplied ``on_error`` hook
-       (default: log via :mod:`logging`) without killing the stream.
+    1. 在传输层上维持一个单一的 ``StreamEvents`` 订阅。
+    2. 为每个事件构建一个 :class:`Ctx`，其 ``client`` 绑定到事件的 ``account_key``。
+    3. 将 ``(event, ctx)`` 传递给 ``Router.dispatch``。
+    4. 跨账号并发运行处理器，但在账号内部保持事件严格有序（这样账号 A 的慢速处理器
+       不会阻塞账号 B，同时来自账号 A 的两条消息仍按到达顺序执行）。
+    5. 将处理器异常暴露给用户提供的 ``on_error`` 钩子（默认：通过 :mod:`logging` 记录日志），
+       而不中断流。
 
-Design notes:
-    * Per-account ordering is enforced with one ``asyncio.Task`` per
-      account, fed by an ``asyncio.Queue``. The dispatcher never blocks
-      on a handler -- it enqueues and moves on.
-    * ``stop()`` is cooperative: cancels the stream-reader, drains the
-      per-account queues, and waits up to ``drain_timeout`` for
-      in-flight handlers to finish.
+设计说明：
+    * 账号内部的顺序性通过每个账号对应一个 ``asyncio.Task`` 并由 ``asyncio.Queue`` 驱动来保证。
+      派发器绝不会在处理器上阻塞 —— 它入队后即继续处理下一个。
+    * ``stop()`` 是协作式的：取消流读取器，排空每个账号的队列，并等待最多 ``drain_timeout`` 秒
+       以完成正在运行的处理。
 """
 
 from __future__ import annotations
@@ -50,13 +45,11 @@ _log = logging.getLogger("fastmeow.dispatcher")
 
 @dataclass(frozen=True, slots=True)
 class _BoundClient:
-    """Concrete :class:`AccountClient` backed by a Transport + account_key.
+    """由传输层 + account_key 支持的具体 :class:`AccountClient` 实现。
 
-    A new instance is constructed for every dispatched event because the
-    ``jid`` may change (e.g. right after pairing). Keeping it cheap and
-    immutable also means handlers can stash it transiently inside their
-    own data without worrying about races -- the underlying Transport
-    is the one shared resource.
+    每个派发的事件都会构建一个新实例，因为 ``jid`` 可能会发生变化（例如在配对之后）。
+    保持其实例创建开销低且不可变，意味着处理器可以将其暂时存储在自己的数据中，
+    而无需担心竞态条件 —— 底层的传输层才是唯一的共享资源。
     """
 
     _transport: Transport
@@ -80,7 +73,7 @@ class _BoundClient:
         )
 
 
-# Static check: _BoundClient really satisfies AccountClient.
+# 静态检查：_BoundClient 确实满足 AccountClient 接口要求。
 _: AccountClient = _BoundClient(_transport=None, account_key="", jid="")  # type: ignore[arg-type]
 del _
 
@@ -104,17 +97,17 @@ async def _default_error_hook(event: Event, exc: BaseException) -> None:
 
 
 class Dispatcher:
-    """Connect a :class:`Transport` stream to a :class:`Router`.
+    """将 :class:`Transport` 流连接到 :class:`Router`。
 
-    Lifecycle::
+    生命周期::
 
         d = Dispatcher(transport, router)
-        await d.start()        # spawns the reader task
-        await d.run_forever()  # await until stop() or stream EOF
-        await d.stop()         # cooperative shutdown
+        await d.start()        # 启动读取器任务
+        await d.run_forever()  # 等待直到 stop() 或流 EOF
+        await d.stop()         # 协作式关闭
 
-    A typical app calls ``await d.run_until_stopped()`` to combine the
-    last two; see :class:`fastmeow.FastMeow`.
+    典型的应用会调用 ``await d.run_until_stopped()`` 以结合最后两步；
+    参见 :class:`fastmeow.FastMeow`。
     """
 
     def __init__(
@@ -147,7 +140,7 @@ class Dispatcher:
         self._reader_task = asyncio.create_task(self._read_loop(), name="fastmeow-dispatcher")
 
     async def run_until_stopped(self) -> None:
-        """Block until either the stream ends or :meth:`stop` is called."""
+        """阻塞直到流结束或调用 :meth:`stop`。"""
         if self._reader_task is None:
             await self.start()
         assert self._reader_task is not None
@@ -157,14 +150,12 @@ class Dispatcher:
             await self.stop()
 
     async def stop(self) -> None:
-        """Cancel the reader, drain per-account queues, await workers.
+        """取消读取器，排空每个账号的队列，并等待工作任务结束。
 
-        Stop is fail-safe: the global stop flag is set first so workers
-        exit naturally once their queue is empty, then ``put_nowait``
-        wakes idle workers without ever blocking on a full queue. This
-        avoids a deadlock where a slow handler keeps the queue full and
-        ``stop()`` would otherwise block forever waiting to enqueue the
-        sentinel.
+        停止操作是故障安全的：首先设置全局停止标志，使工作任务在队列为空时自然退出，
+        然后通过 ``put_nowait`` 唤醒空闲的工作任务，且绝不会阻塞在已满的队列上。
+        这避免了由于慢速处理器导致队列占满，进而使 ``stop()`` 在等待入队哨兵值时永久阻塞
+        的死锁情况。
         """
         if self._stopped.is_set():
             return
@@ -179,14 +170,13 @@ class Dispatcher:
             workers = list(self._workers.values())
             self._workers.clear()
 
-        # Wake up any worker currently waiting on an empty queue.
-        # Workers also re-check ``_stopped`` after every event, so a busy
-        # worker will exit on its own once its queue drains. We never
-        # ``await put`` here -- that would deadlock against a full queue
-        # whose consumer is stuck in a long handler.
+        # 唤醒当前正在等待空队列的所有工作任务。
+        # 工作任务在处理完每个事件后也会重新检查 ``_stopped``，因此忙碌的工作任务
+        # 会在队列排空后自行退出。我们在此处从不使用 ``await put`` —— 
+        # 否则如果消费者卡在长耗时的处理器中且队列已满，将会导致死锁。
         for w in workers:
-            # Worker will see ``_stopped`` and exit after the next
-            # event it processes (or is cancelled below on timeout).
+            # 工作任务将看到 ``_stopped`` 并在处理完下一个
+            # 事件（或在超时后被下方取消）后退出。
             with contextlib.suppress(asyncio.QueueFull):
                 w.queue.put_nowait(None)
 
@@ -201,19 +191,18 @@ class Dispatcher:
                     if not w.task.done():
                         w.task.cancel()
 
-    # -- internals ---------------------------------------------------------
+    # -- 内部方法 ---------------------------------------------------------
 
     async def _read_loop(self) -> None:
-        """Single consumer of ``Transport.stream_events``."""
+        """``Transport.stream_events`` 的单一消费者。"""
         try:
             async for event in self._transport.stream_events():
                 await self._enqueue(event)
         except asyncio.CancelledError:
             raise
         except Exception:
-            # Stream errors (sidecar crash, network) are terminal for
-            # the dispatcher in Phase 2. The app layer decides whether
-            # to restart everything.
+            # 流错误（sidecar 崩溃、网络故障）在第二阶段对派发器而言是致命的。
+            # app 层将决定是否重启所有组件。
             _log.exception("event stream terminated with error")
             raise
 
@@ -222,11 +211,10 @@ class Dispatcher:
         try:
             worker.queue.put_nowait(event)
         except asyncio.QueueFull as exc:
-            # 0.1.0: every streamed event is critical (message, qr,
-            # pair_success, connected, disconnected, logged_out). Silent
-            # drop-oldest would desynchronize handler state. Fail fast:
-            # log loudly, set the global stop flag so workers exit, and
-            # raise so the read loop terminates the dispatcher visibly.
+            # 0.1.0: 流式传输的每个事件都是关键的（消息、qr、配对成功、已连接、
+            # 已断开连接、已注销）。静默丢弃旧事件会导致处理器状态失同步。
+            # 快速失败：记录严重错误日志，设置全局停止标志以让工作任务退出，
+            # 并抛出异常以使读取循环显式地终止派发器。
             self._stopped.set()
             _log.error(
                 "per-account queue overflow for %s (size=%d); failing fast. "
@@ -258,14 +246,13 @@ class Dispatcher:
         account_key: str,
         queue: asyncio.Queue[Event | None],
     ) -> None:
-        """Per-account serial executor.
+        """单个账号的串行执行器。
 
-        Exits when:
-          * a ``None`` sentinel is dequeued (graceful stop), or
-          * ``_stopped`` is set and the queue is empty (drain complete).
-        Both conditions are needed because :meth:`stop` may not be able
-        to enqueue a sentinel against a full queue, and a busy worker
-        could otherwise outlive the dispatcher.
+        退出条件：
+          * 移出队列的值为 ``None`` 哨兵（优雅停止），或者
+          * ``_stopped`` 已设置且队列为空（排空完成）。
+        两个条件都是必要的，因为当队列满时 :meth:`stop` 可能无法入队哨兵值，
+        而忙碌的工作任务可能比派发器存活更久。
         """
         while True:
             if self._stopped.is_set() and queue.empty():
