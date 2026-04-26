@@ -53,9 +53,12 @@ ENV/
 *.out
 
 # ─── FastMeow runtime artifacts (NEVER commit) ───────────────────────
-# WhatsApp session storage (contains paired device credentials)
-sessions/
-e2e-smoke-sessions/
+# WhatsApp session storage (contains paired device credentials).
+# Anchored with leading slash so the Go package `internal/sessions/`
+# is NOT ignored - that bug previously caused CI builds to fail with
+# "no required module provides package .../internal/sessions".
+/sessions/
+/e2e-smoke-sessions/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
