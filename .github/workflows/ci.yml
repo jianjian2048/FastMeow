@@ -1,0 +1,61 @@
+# Continuous integration: runs on every push and PR against main.
+# Single job - lint + typecheck + tests. Mirrors the `quality` job in
+# release.yml so that nothing reaches main without passing the same gate
+# we run before building wheels.
+#
+# Why a separate workflow (vs reusing release.yml's quality job):
+#   release.yml fires only on tags + workflow_dispatch (it's expensive and
+#   produces release artifacts). Day-to-day branch pushes / PRs need a
+#   cheap, always-on gate; that's this file.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  # Cancel in-progress runs on the same branch/PR when a new commit lands -
+  # we only care about the latest state.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint + typecheck + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.9.10"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sync dev deps (frozen)
+        # --frozen ensures uv.lock is honored; if pyproject drifted from
+        # the lock the job fails fast here, which is what we want.
+        run: uv sync --frozen
+
+      - name: Ruff
+        run: uv run ruff check .
+
+      - name: Mypy (strict)
+        run: |
+          uv run mypy src/fastmeow
+          uv run mypy examples/basic_echo.py
+
+      - name: Pytest
+        run: uv run pytest
