@@ -1,0 +1,317 @@
+// FastMeow Gateway API — minimal Phase 1 contract.
+//
+// Stability: this file is the public boundary between the Python SDK and the
+// Go sidecar. Once tagged v1.0, additions are allowed (new RPCs, new event
+// variants, new optional fields) but existing fields are immutable. Removals
+// require a new package version (fastmeow.v2).
+//
+// Phase 1 scope:
+//   - Single sidecar process hosting N whatsmeow.Client instances.
+//   - QR pairing + text message send/receive.
+//   - Server-streaming events (no bidi, no soft events by default).
+//
+// Not in Phase 1 (reserved field numbers held for later):
+//   - Media (image/audio/video/document) send & receive.
+//   - Reactions, edits, revokes.
+//   - Receipts, presence, group metadata.
+//   - Sharded sidecar coordination (single sidecar_id="default" in Phase 1).
+
+syntax = "proto3";
+
+package fastmeow.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/jianjian2048/fastmeow/gen/go/fastmeow/v1;fastmeowv1";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Service
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Convention: every RPC has a dedicated *Response message even when the body
+// is currently empty or trivial. This lets us add response fields later
+// without breaking the wire.
+
+service GatewayService {
+  // Health & version handshake. Called by the supervisor right after spawn to
+  // verify the sidecar is alive and protocol-compatible.
+  rpc Ping(PingRequest) returns (PingResponse);
+
+  // Idempotently register an account_key with the sidecar. If the key is new,
+  // a fresh whatsmeow Device is created (unpaired). If it exists, the existing
+  // device is returned. Must be called before Connect.
+  rpc EnsureAccount(EnsureAccountRequest) returns (EnsureAccountResponse);
+
+  // Drive the whatsmeow.Client lifecycle: open WebSocket, drive QR loop if
+  // unpaired, transition to CONNECTED on PairSuccess. Idempotent.
+  rpc Connect(ConnectRequest) returns (ConnectResponse);
+
+  // Close the WebSocket but keep the device credentials.
+  rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
+
+  // Wipe device credentials. Account must re-pair via QR after this.
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+
+  // Send a message. The client_msg_id field provides idempotency; if a
+  // request with the same (account_key, client_msg_id) was acknowledged in
+  // the dedup window, the cached response is returned without resending.
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+
+  // Single long-lived server-stream carrying ALL events for ALL accounts on
+  // this sidecar. Python opens exactly one StreamEvents call per sidecar.
+  // Events from different accounts are multiplexed; consumers route by
+  // account_key.
+  //
+  // Ordering: events for a given (account_key, chat_jid) pair are emitted in
+  // monotonically-increasing seq order. Cross-chat ordering is not guaranteed.
+  rpc StreamEvents(StreamEventsRequest) returns (stream StreamEventsResponse);
+
+  // Request graceful shutdown. The sidecar will:
+  //   1. Stop accepting new RPCs.
+  //   2. Disconnect all clients cleanly.
+  //   3. Flush event stream.
+  //   4. Exit with code 0.
+  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Health
+// ─────────────────────────────────────────────────────────────────────────────
+
+message PingRequest {
+  // Python supervisor's protocol version. Sidecar rejects mismatches.
+  uint32 client_protocol_version = 1;
+}
+
+message PingResponse {
+  uint32 server_protocol_version = 1;
+  string sidecar_version = 2;       // human-readable, e.g. "0.1.0"
+  string whatsmeow_version = 3;     // upstream library version pinned at build
+  string sidecar_id = 4;            // "default" in single mode
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Account state (shared)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Connection lifecycle of a single account inside the sidecar. Returned from
+// every account-management RPC so the caller always gets the authoritative
+// post-call state.
+message AccountState {
+  enum State {
+    STATE_UNSPECIFIED = 0;
+    STATE_UNPAIRED = 1;       // no device credentials, needs QR
+    STATE_PAIRING = 2;        // QR generated, awaiting scan
+    STATE_CONNECTING = 3;     // websocket opening
+    STATE_CONNECTED = 4;      // online and receiving
+    STATE_DISCONNECTED = 5;   // intentionally offline, credentials retained
+    STATE_LOGGED_OUT = 6;     // credentials wiped
+    STATE_RECOVERING = 7;     // sidecar restarted, re-establishing
+  }
+
+  string account_key = 1;
+  string jid = 2;            // empty if not yet paired
+  State state = 3;
+
+  // Reason for the current state, especially useful for STATE_DISCONNECTED.
+  // Free-form, debug-only. Not part of the stable contract for parsing.
+  string reason = 4;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Account RPCs
+// ─────────────────────────────────────────────────────────────────────────────
+
+message EnsureAccountRequest {
+  // Python-defined stable identifier (e.g. "sales", "bot-017"). Primary key
+  // on the Python side. Maps 1:1 to a whatsmeow Device row.
+  string account_key = 1;
+
+  // Optional human-readable name. Persisted into manifest.json by Python.
+  string display_name = 2;
+
+  // Optional. The WhatsApp JID this account_key was previously paired to,
+  // sourced from the Python supervisor's manifest.json (the single source
+  // of truth for account_key -> jid mapping; the sidecar deliberately
+  // does NOT maintain this mapping).
+  //
+  //   - empty: sidecar allocates a fresh, unpaired device. Caller must
+  //     follow up with Connect to drive QR pairing.
+  //   - non-empty: sidecar loads the persisted device for this jid. If
+  //     the device row is missing the call fails with FAILED_PRECONDITION
+  //     (manifest/db drift requires explicit recovery, not silent
+  //     re-pairing).
+  string jid = 3;
+}
+
+message EnsureAccountResponse {
+  AccountState state = 1;
+  bool created = 2;          // true if a new Device row was just inserted
+}
+
+message ConnectRequest {
+  string account_key = 1;
+}
+
+message ConnectResponse {
+  AccountState state = 1;
+}
+
+message DisconnectRequest {
+  string account_key = 1;
+}
+
+message DisconnectResponse {
+  AccountState state = 1;
+}
+
+message LogoutRequest {
+  string account_key = 1;
+}
+
+message LogoutResponse {
+  AccountState state = 1;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sending
+// ─────────────────────────────────────────────────────────────────────────────
+
+message SendMessageRequest {
+  string account_key = 1;
+  string to_jid = 2;
+
+  // Idempotency key. Required. Python generates this (e.g. UUID or
+  // deterministic hash). The sidecar dedups on (account_key, client_msg_id)
+  // within an in-memory window (Phase 1: 5 minutes, 10k entries LRU).
+  string client_msg_id = 3;
+
+  // Phase 1: text only. Future media bodies will live in numbers 11..19.
+  TextBody text = 10;
+
+  // Reserve numbers for the future media types so we never break the wire.
+  reserved 11 to 19;
+  reserved "image", "audio", "video", "document", "reaction", "edit", "revoke";
+}
+
+message TextBody {
+  string body = 1;
+
+  // Optional reply-to. The referenced message_id must be one we've previously
+  // observed (sent or received) for the same account.
+  string reply_to_message_id = 2;
+}
+
+message SendMessageResponse {
+  // Server-assigned WhatsApp message id. Stable across retries within the
+  // dedup window.
+  string message_id = 1;
+
+  // Server timestamp from WhatsApp.
+  google.protobuf.Timestamp server_timestamp = 2;
+
+  // True if this response was served from the dedup cache (i.e. the same
+  // client_msg_id was seen before and we did NOT resend).
+  bool deduped = 3;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Event stream
+// ─────────────────────────────────────────────────────────────────────────────
+
+message StreamEventsRequest {
+  // If true, include high-volume low-value events (presence, receipts beyond
+  // the ones tied to outbound sends, sync noise). Default false. Phase 1
+  // does not implement these even when true; the flag exists for forward
+  // compat.
+  bool include_soft_events = 1;
+
+  // Optional resume cursor. Phase 1 ignores this (sidecar has no event
+  // persistence; on reconnect Python replays state via Connect).
+  uint64 resume_after_seq = 2;
+}
+
+// Wrapper carrying routing metadata + the event payload. seq is monotonic
+// across the entire sidecar lifetime (resets on sidecar restart).
+message StreamEventsResponse {
+  uint64 seq = 1;
+  string sidecar_id = 2;       // "default" in single mode
+  string account_key = 3;
+  string account_jid = 4;       // empty if account not yet paired
+  google.protobuf.Timestamp observed_at = 5;
+
+  oneof event {
+    ConnectedEvent connected = 10;
+    DisconnectedEvent disconnected = 11;
+    QREvent qr = 12;
+    PairSuccessEvent pair_success = 13;
+    MessageEvent message = 14;
+    LoggedOutEvent logged_out = 15;
+    UnknownEvent unknown = 99;
+  }
+
+  // Reserved for future event variants.
+  reserved 16 to 98;
+}
+
+message ConnectedEvent {}
+
+message DisconnectedEvent {
+  string reason = 1;            // free-form debug string
+}
+
+// Emitted while pairing. The same QR string is re-emitted on rotation
+// (whatsmeow rotates ~every 20 seconds). Python should render the latest.
+message QREvent {
+  string code = 1;              // raw QR payload, render via qrcode lib
+  uint32 ttl_seconds = 2;       // remaining validity for this code
+}
+
+message PairSuccessEvent {
+  string jid = 1;
+  string business_name = 2;
+  string platform = 3;          // "android", "ios", etc.
+}
+
+message LoggedOutEvent {
+  string reason = 1;            // e.g. "phone_unlinked", "banned"
+}
+
+message MessageEvent {
+  string message_id = 1;
+  string chat_jid = 2;
+  string sender_jid = 3;
+  bool from_me = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  bool is_group = 6;
+
+  // Phase 1: text-only. Future media variants will be added as additional
+  // fields (a oneof would break wire compat with Phase 1 messages).
+  string text = 10;
+
+  // Reply context: the message_id this is a reply to. Empty if not a reply.
+  string reply_to_message_id = 11;
+
+  // Reserved for future media payloads.
+  reserved 12 to 29;
+  reserved "image", "audio", "video", "document", "sticker";
+}
+
+// Catch-all for whatsmeow events the adapter doesn't yet translate. Carries
+// the Go type name for debugging. Python surfaces these as UnknownEvent
+// (not delivered to user handlers by default).
+message UnknownEvent {
+  string go_type = 1;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lifecycle
+// ─────────────────────────────────────────────────────────────────────────────
+
+message ShutdownRequest {
+  // Grace period in milliseconds. After this elapses, the sidecar exits even
+  // if disconnects haven't all completed.
+  uint32 grace_ms = 1;
+}
+
+message ShutdownResponse {}
