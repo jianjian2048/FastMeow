@@ -53,16 +53,11 @@ dev = [
 requires = ["uv_build>=0.9.10,<0.10.0"]
 build-backend = "uv_build"
 
-[tool.uv_build]
-# Ship the bundled Go sidecar binary inside the wheel.
-# cibuildwheel populates src/fastmeow/_bin/ before invoking the build.
-package-data = { "fastmeow" = [
-    "_bin/*",
-    "_bin/*/*",
-    "_generated/**/*.py",
-    "_generated/**/*.pyi",
-    "py.typed",
-] }
+# Note: uv_build automatically includes everything under src/fastmeow/, so
+# `_bin/<exe>` and `_generated/**` are picked up without extra config.
+# The Go sidecar is placed into src/fastmeow/_bin/ by the release workflow
+# before invoking `uv build --wheel` on a per-platform basis. See
+# scripts/repack_wheel.py for post-build retagging.
 
 [tool.ruff]
 line-length = 100

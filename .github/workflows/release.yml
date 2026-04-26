@@ -1,0 +1,214 @@
+# Release workflow: cross-compile the Go sidecar for 3 platforms from a single
+# Linux runner, build a Python wheel for each, and (optionally) publish.
+#
+# Why a single runner is sufficient:
+#   - The Go sidecar is pure Go (CGO_ENABLED=0); whatsmeow + modernc.org/sqlite
+#     do not require any C toolchain.
+#   - The Python package itself is pure Python (no C extensions).
+#   - Therefore each wheel is just `py3-none-<platform>` with a different
+#     pre-built sidecar embedded under `fastmeow/_bin/`.
+#
+# Why not cibuildwheel:
+#   cibuildwheel is designed for C-extension wheels and would rebuild a
+#   byte-identical wheel for every CPython ABI (cp312/cp313/...). For us each
+#   platform needs exactly one wheel, so we use `uv build` once per platform
+#   and then `scripts/repack_wheel.py` to retag and flip Root-Is-Purelib.
+
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to PyPI (otherwise just upload artifacts)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint + typecheck + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.9.10"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Sync dev deps
+        run: uv sync --frozen
+      - name: Ruff
+        run: uv run ruff check .
+      - name: Mypy (strict, src + examples)
+        run: |
+          uv run mypy src/fastmeow
+          uv run mypy examples/basic_echo.py
+      - name: Pytest
+        run: uv run pytest
+
+  build:
+    name: Build wheels (linux + macos-arm64 + windows from ubuntu)
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            goamd64: v1
+            ext: ""
+            platform_tag: manylinux2014_x86_64
+          - goos: darwin
+            goarch: arm64
+            goamd64: ""
+            ext: ""
+            platform_tag: macosx_12_0_arm64
+          - goos: windows
+            goarch: amd64
+            goamd64: v1
+            ext: ".exe"
+            platform_tag: win_amd64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.x"
+          cache: true
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.9.10"
+
+      - name: Setup Python
+        # uv_build needs a Python interpreter to invoke the build backend; uv
+        # will pick this one up automatically.
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cross-compile sidecar (${{ matrix.goos }}/${{ matrix.goarch }})
+        env:
+          CGO_ENABLED: "0"
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          GOAMD64: ${{ matrix.goamd64 }}
+        run: |
+          mkdir -p src/fastmeow/_bin
+          # -trimpath: deterministic builds; strip absolute build paths.
+          # -s -w: strip symbol table + DWARF, ~30% smaller binary.
+          go build -trimpath -ldflags="-s -w" \
+            -o "src/fastmeow/_bin/fastmeow-sidecar${{ matrix.ext }}" \
+            ./cmd/fastmeow-sidecar
+          ls -lh src/fastmeow/_bin/
+
+      - name: Build base wheel (py3-none-any)
+        run: uv build --wheel
+
+      - name: Retag wheel for ${{ matrix.platform_tag }}
+        # The base wheel from uv_build is tagged py3-none-any with
+        # Root-Is-Purelib: true. Because we ship a native binary it must be
+        # platform-tagged with Root-Is-Purelib: false (per PEP 427 + spec).
+        # See scripts/repack_wheel.py for full rationale.
+        run: |
+          python scripts/repack_wheel.py \
+            "$(ls dist/fastmeow-*-py3-none-any.whl)" \
+            --platform ${{ matrix.platform_tag }}
+          # Drop the intermediate any-tagged wheel so we don't accidentally
+          # publish it.
+          rm dist/fastmeow-*-py3-none-any.whl
+          ls -lh dist/
+
+      - name: Verify wheel structure
+        run: |
+          set -euxo pipefail
+          WHEEL=$(ls dist/fastmeow-*-${{ matrix.platform_tag }}.whl)
+          python -m zipfile -t "$WHEEL"
+          # Confirm sidecar is embedded under fastmeow/_bin/.
+          python -c "
+          import zipfile, sys
+          z = zipfile.ZipFile('$WHEEL')
+          names = z.namelist()
+          bin_files = [n for n in names if n.startswith('fastmeow/_bin/')]
+          assert bin_files, 'no _bin/ files found in wheel'
+          print('Bundled sidecar:', bin_files)
+          # Confirm WHEEL metadata is correct.
+          meta = z.read('fastmeow-0.1.0.dist-info/WHEEL').decode()
+          assert 'Tag: py3-none-${{ matrix.platform_tag }}' in meta, meta
+          assert 'Root-Is-Purelib: false' in meta, meta
+          print('WHEEL metadata OK')
+          "
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.platform_tag }}
+          path: dist/*.whl
+          if-no-files-found: error
+          retention-days: 14
+
+  sdist:
+    name: Build sdist
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.9.10"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build sdist
+        # The sdist contains source + the Go module so end users can `pip
+        # install --no-binary fastmeow` and trigger a local Go build (future
+        # enhancement; today the sdist is mostly for PyPI metadata).
+        run: uv build --sdist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish to PyPI
+    needs: [build, sdist]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.publish
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/p/fastmeow
+    permissions:
+      # Required for trusted publishing (no API token needed).
+      id-token: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Inspect dist/
+        run: ls -lh dist/
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          skip-existing: true
