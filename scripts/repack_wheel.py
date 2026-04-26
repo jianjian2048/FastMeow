@@ -43,6 +43,7 @@ import hashlib
 import io
 import sys
 import tempfile
+import time
 import zipfile
 from pathlib import Path
 
@@ -169,6 +170,19 @@ def repack(input_wheel: Path, platform_tag: str, out_dir: Path) -> Path:
         _regenerate_record(staging, dist_info)
 
         # 5. Repack. Sort entries for reproducibility.
+        # IMPORTANT: zipfile.ZipFile.write() defaults to whatever permissions
+        # the host filesystem reports, which is brittle:
+        #   - Windows NTFS has no concept of unix +x at all (everything ends
+        #     up 0o644 or similar).
+        #   - On Linux, `uv build` appears to normalize file modes to 0o644
+        #     when it stages files into the wheel, even though our Go build
+        #     just produced 0o755. This means the input "py3-none-any" wheel
+        #     ALREADY has the sidecar with no +x.
+        # Either way, we cannot trust host permissions. We explicitly stamp
+        # the sidecar binary as 0o755 and everything else as 0o644 here so
+        # the produced wheel is correct regardless of host OS.
+        # (Without this, `pip install` on Linux/macOS leaves the sidecar
+        # non-executable and the SDK fails with Permission denied at runtime.)
         if out_path.exists():
             out_path.unlink()
         with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
@@ -176,7 +190,25 @@ def repack(input_wheel: Path, platform_tag: str, out_dir: Path) -> Path:
                 if not path.is_file():
                     continue
                 arcname = path.relative_to(staging).as_posix()
-                zf.write(path, arcname)
+                # Decide unix mode: sidecar binaries get +x, everything else
+                # gets plain 0o644. We match on the `_bin/` path segment so
+                # the rule is independent of file extension (Linux/macOS use
+                # `fastmeow-sidecar`, Windows uses `fastmeow-sidecar.exe`).
+                is_binary = arcname.startswith("fastmeow/_bin/")
+                unix_mode = 0o755 if is_binary else 0o644
+                # Build a ZipInfo so we can set external_attr (high 16 bits =
+                # unix mode). We also set the regular-file marker bit (0o100000)
+                # which `pip` checks when restoring permissions.
+                info = zipfile.ZipInfo(filename=arcname)
+                info.external_attr = (0o100000 | unix_mode) << 16
+                info.compress_type = zipfile.ZIP_DEFLATED
+                # Preserve mtime determinism: zip out the file with its on-disk
+                # mtime (zipfile defaults to current time otherwise, which
+                # also breaks reproducibility).
+                stat = path.stat()
+                info.date_time = time.gmtime(stat.st_mtime)[:6]
+                with path.open("rb") as fh:
+                    zf.writestr(info, fh.read())
 
     return out_path
 
