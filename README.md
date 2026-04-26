@@ -1,4 +1,6 @@
 # FastMeow
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 Pythonic, async-native WhatsApp automation SDK powered by an embedded whatsmeow Go sidecar.
 
 ## Why FastMeow
