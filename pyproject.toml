@@ -20,8 +20,10 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
     "Topic :: Communications :: Chat",
     "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
 ]
 dependencies = [
     "grpcio>=1.68",
@@ -38,6 +40,7 @@ dependencies = [
 Homepage = "https://github.com/jianjian2048/fastmeow"
 Repository = "https://github.com/jianjian2048/fastmeow"
 Issues = "https://github.com/jianjian2048/fastmeow/issues"
+Changelog = "https://github.com/jianjian2048/fastmeow/releases"
 
 [dependency-groups]
 dev = [
