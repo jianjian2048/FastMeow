@@ -40,7 +40,7 @@ dependencies = [
 Homepage = "https://github.com/jianjian2048/fastmeow"
 Repository = "https://github.com/jianjian2048/fastmeow"
 Issues = "https://github.com/jianjian2048/fastmeow/issues"
-Changelog = "https://github.com/jianjian2048/fastmeow/releases"
+Changelog = "https://github.com/jianjian2048/FastMeow/blob/main/CHANGELOG.md"
 
 [dependency-groups]
 dev = [
