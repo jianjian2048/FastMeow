@@ -27,12 +27,11 @@ if _version_not_supported:
 
 class GatewayServiceStub(object):
     """─────────────────────────────────────────────────────────────────────────────
-    Service
+    Service (服务)
     ─────────────────────────────────────────────────────────────────────────────
 
-    Convention: every RPC has a dedicated *Response message even when the body
-    is currently empty or trivial. This lets us add response fields later
-    without breaking the wire.
+    惯例：即使包体目前为空或微不足道，每个 RPC 也有专用的 *Response 消息。
+    这让我们以后可以在不破坏 wire 协议的情况下添加响应字段。
 
     """
 
@@ -77,6 +76,51 @@ class GatewayServiceStub(object):
                 request_serializer=fastmeow_dot_v1_dot_gateway__pb2.StreamEventsRequest.SerializeToString,
                 response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.StreamEventsResponse.FromString,
                 _registered_method=True)
+        self.ListJoinedGroups = channel.unary_unary(
+                '/fastmeow.v1.GatewayService/ListJoinedGroups',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.ListJoinedGroupsRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.ListJoinedGroupsResponse.FromString,
+                _registered_method=True)
+        self.GetGroupInfo = channel.unary_unary(
+                '/fastmeow.v1.GatewayService/GetGroupInfo',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.GetGroupInfoRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.GetGroupInfoResponse.FromString,
+                _registered_method=True)
+        self.PreviewGroupInvite = channel.unary_unary(
+                '/fastmeow.v1.GatewayService/PreviewGroupInvite',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.PreviewGroupInviteRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.PreviewGroupInviteResponse.FromString,
+                _registered_method=True)
+        self.JoinGroupViaInvite = channel.unary_unary(
+                '/fastmeow.v1.GatewayService/JoinGroupViaInvite',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.JoinGroupViaInviteRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.JoinGroupViaInviteResponse.FromString,
+                _registered_method=True)
+        self.LeaveGroup = channel.unary_unary(
+                '/fastmeow.v1.GatewayService/LeaveGroup',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.LeaveGroupRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.LeaveGroupResponse.FromString,
+                _registered_method=True)
+        self.CreateGroup = channel.unary_unary(
+                '/fastmeow.v1.GatewayService/CreateGroup',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.CreateGroupRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.CreateGroupResponse.FromString,
+                _registered_method=True)
+        self.UpdateGroupSettings = channel.unary_unary(
+                '/fastmeow.v1.GatewayService/UpdateGroupSettings',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.UpdateGroupSettingsRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.UpdateGroupSettingsResponse.FromString,
+                _registered_method=True)
+        self.UpdateGroupParticipants = channel.unary_unary(
+                '/fastmeow.v1.GatewayService/UpdateGroupParticipants',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.UpdateGroupParticipantsRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.UpdateGroupParticipantsResponse.FromString,
+                _registered_method=True)
+        self.GetGroupInviteLink = channel.unary_unary(
+                '/fastmeow.v1.GatewayService/GetGroupInviteLink',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.GetGroupInviteLinkRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.GetGroupInviteLinkResponse.FromString,
+                _registered_method=True)
         self.Shutdown = channel.unary_unary(
                 '/fastmeow.v1.GatewayService/Shutdown',
                 request_serializer=fastmeow_dot_v1_dot_gateway__pb2.ShutdownRequest.SerializeToString,
@@ -86,82 +130,165 @@ class GatewayServiceStub(object):
 
 class GatewayServiceServicer(object):
     """─────────────────────────────────────────────────────────────────────────────
-    Service
+    Service (服务)
     ─────────────────────────────────────────────────────────────────────────────
 
-    Convention: every RPC has a dedicated *Response message even when the body
-    is currently empty or trivial. This lets us add response fields later
-    without breaking the wire.
+    惯例：即使包体目前为空或微不足道，每个 RPC 也有专用的 *Response 消息。
+    这让我们以后可以在不破坏 wire 协议的情况下添加响应字段。
 
     """
 
     def Ping(self, request, context):
-        """Health & version handshake. Called by the supervisor right after spawn to
-        verify the sidecar is alive and protocol-compatible.
+        """健康检查与版本握手。由 supervisor 在启动后立即调用，
+        以验证 sidecar 是否存活且协议兼容。
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def EnsureAccount(self, request, context):
-        """Idempotently register an account_key with the sidecar. If the key is new,
-        a fresh whatsmeow Device is created (unpaired). If it exists, the existing
-        device is returned. Must be called before Connect.
+        """幂等地向 sidecar 注册 账号 / account_key。如果 key 是新的，
+        则创建一个新的 whatsmeow 设备（未配对）。如果已存在，
+        则返回现有设备。必须在 Connect 之前调用。
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def Connect(self, request, context):
-        """Drive the whatsmeow.Client lifecycle: open WebSocket, drive QR loop if
-        unpaired, transition to CONNECTED on PairSuccess. Idempotent.
+        """驱动 whatsmeow.Client 生命周期：打开 WebSocket，如果是
+        未配对状态则驱动 QR 循环，在 PairSuccess 时转换到 CONNECTED 状态。幂等。
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def Disconnect(self, request, context):
-        """Close the WebSocket but keep the device credentials.
+        """关闭 WebSocket 但保留设备凭据。
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def Logout(self, request, context):
-        """Wipe device credentials. Account must re-pair via QR after this.
+        """清除设备凭据。此后账号必须通过 QR 重新配对。
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def SendMessage(self, request, context):
-        """Send a message. The client_msg_id field provides idempotency; if a
-        request with the same (account_key, client_msg_id) was acknowledged in
-        the dedup window, the cached response is returned without resending.
+        """发送消息。client_msg_id 字段提供幂等性；如果具有相同
+        (account_key, client_msg_id) 的请求在去重窗口内已被确认，
+        则返回缓存的响应而不重新发送。
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def StreamEvents(self, request, context):
-        """Single long-lived server-stream carrying ALL events for ALL accounts on
-        this sidecar. Python opens exactly one StreamEvents call per sidecar.
-        Events from different accounts are multiplexed; consumers route by
-        account_key.
+        """单个长连接服务端流，承载此 sidecar 上所有账号的所有事件。
+        Python 为每个 sidecar 打开一个 StreamEvents 调用。
+        来自不同账号的事件被多路复用；消费者通过 account_key 进行路由。
 
-        Ordering: events for a given (account_key, chat_jid) pair are emitted in
-        monotonically-increasing seq order. Cross-chat ordering is not guaranteed.
+        顺序：给定 (account_key, chat_jid) 对的事件按单调递增的 seq 顺序发出。
+        不保证跨聊天顺序。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListJoinedGroups(self, request, context):
+        """───────────────────────────────────────────────────────────────────────────
+        Group RPCs (Phase 4.1)
+        ───────────────────────────────────────────────────────────────────────────
+
+        设计要点：
+        - 所有读 RPC 直接命中 whatsmeow 的本地缓存或服务端拉取，sidecar 不缓存。
+        - 所有写 RPC 由用户主动触发，不做幂等键去重（与 SendMessage 不同）；
+        重复调用会向 WhatsApp 重复发送，由调用方负责。
+        - 错误映射：JID 非法 → INVALID_ARGUMENT；账号未连接 → FAILED_PRECONDITION；
+        whatsmeow 业务错误（403/不在群里/被踢等）→ PERMISSION_DENIED 或 NOT_FOUND；
+        其他网络/服务端错误 → UNAVAILABLE 并附带原始错误文本。
+
+        列出该账号当前加入的所有群（whatsmeow GetJoinedGroups）。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetGroupInfo(self, request, context):
+        """获取单个群的完整元数据（whatsmeow GetGroupInfo）。
+        如果账号不在该群，返回 NOT_FOUND。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def PreviewGroupInvite(self, request, context):
+        """通过邀请链接预览群信息但不加入（whatsmeow GetGroupInfoFromLink）。
+        邀请链接形如 "https://chat.whatsapp.com/<code>"，code 部分会被自动剥取。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def JoinGroupViaInvite(self, request, context):
+        """通过邀请链接加入群（whatsmeow JoinGroupWithLink）。
+        加入后 whatsmeow 会发出 GroupInfo 事件，由 bus 转发为 JoinedGroupEvent。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def LeaveGroup(self, request, context):
+        """离开群（whatsmeow LeaveGroup）。如果账号不在群里，返回 NOT_FOUND。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CreateGroup(self, request, context):
+        """创建新群（whatsmeow CreateGroup）。
+        至少需要一个除创建者外的初始参与者；whatsmeow 不允许创建只有自己的群。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateGroupSettings(self, request, context):
+        """修改群设置（名称/主题/announce/locked）。
+        仅允许修改请求中显式设置的字段，缺省字段保持不变。
+        各字段对应 whatsmeow 的 SetGroupName / SetGroupTopic /
+        SetGroupAnnounce / SetGroupLocked。需要管理员权限。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateGroupParticipants(self, request, context):
+        """添加 / 移除 / 提升 / 降级群成员（whatsmeow UpdateGroupParticipants）。
+        单次调用所有目标 JID 共享同一动作；混合动作请发起多次调用。
+        需要管理员权限。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetGroupInviteLink(self, request, context):
+        """取回当前群的邀请链接（whatsmeow GetGroupInviteLink）。
+        reset=true 时会失效旧链接并生成新链接。需要管理员权限。
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def Shutdown(self, request, context):
-        """Request graceful shutdown. The sidecar will:
-        1. Stop accepting new RPCs.
-        2. Disconnect all clients cleanly.
-        3. Flush event stream.
-        4. Exit with code 0.
+        """请求优雅停机。sidecar 将：
+        1. 停止接受新的 RPC。
+        2. 干净地断开所有客户端连接。
+        3. 刷新事件流。
+        4. 以代码 0 退出。
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -205,6 +332,51 @@ def add_GatewayServiceServicer_to_server(servicer, server):
                     request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.StreamEventsRequest.FromString,
                     response_serializer=fastmeow_dot_v1_dot_gateway__pb2.StreamEventsResponse.SerializeToString,
             ),
+            'ListJoinedGroups': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListJoinedGroups,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.ListJoinedGroupsRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.ListJoinedGroupsResponse.SerializeToString,
+            ),
+            'GetGroupInfo': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetGroupInfo,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.GetGroupInfoRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.GetGroupInfoResponse.SerializeToString,
+            ),
+            'PreviewGroupInvite': grpc.unary_unary_rpc_method_handler(
+                    servicer.PreviewGroupInvite,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.PreviewGroupInviteRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.PreviewGroupInviteResponse.SerializeToString,
+            ),
+            'JoinGroupViaInvite': grpc.unary_unary_rpc_method_handler(
+                    servicer.JoinGroupViaInvite,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.JoinGroupViaInviteRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.JoinGroupViaInviteResponse.SerializeToString,
+            ),
+            'LeaveGroup': grpc.unary_unary_rpc_method_handler(
+                    servicer.LeaveGroup,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.LeaveGroupRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.LeaveGroupResponse.SerializeToString,
+            ),
+            'CreateGroup': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateGroup,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.CreateGroupRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.CreateGroupResponse.SerializeToString,
+            ),
+            'UpdateGroupSettings': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateGroupSettings,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.UpdateGroupSettingsRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.UpdateGroupSettingsResponse.SerializeToString,
+            ),
+            'UpdateGroupParticipants': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateGroupParticipants,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.UpdateGroupParticipantsRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.UpdateGroupParticipantsResponse.SerializeToString,
+            ),
+            'GetGroupInviteLink': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetGroupInviteLink,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.GetGroupInviteLinkRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.GetGroupInviteLinkResponse.SerializeToString,
+            ),
             'Shutdown': grpc.unary_unary_rpc_method_handler(
                     servicer.Shutdown,
                     request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.ShutdownRequest.FromString,
@@ -220,12 +392,11 @@ def add_GatewayServiceServicer_to_server(servicer, server):
  # This class is part of an EXPERIMENTAL API.
 class GatewayService(object):
     """─────────────────────────────────────────────────────────────────────────────
-    Service
+    Service (服务)
     ─────────────────────────────────────────────────────────────────────────────
 
-    Convention: every RPC has a dedicated *Response message even when the body
-    is currently empty or trivial. This lets us add response fields later
-    without breaking the wire.
+    惯例：即使包体目前为空或微不足道，每个 RPC 也有专用的 *Response 消息。
+    这让我们以后可以在不破坏 wire 协议的情况下添加响应字段。
 
     """
 
@@ -408,6 +579,249 @@ class GatewayService(object):
             '/fastmeow.v1.GatewayService/StreamEvents',
             fastmeow_dot_v1_dot_gateway__pb2.StreamEventsRequest.SerializeToString,
             fastmeow_dot_v1_dot_gateway__pb2.StreamEventsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListJoinedGroups(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/ListJoinedGroups',
+            fastmeow_dot_v1_dot_gateway__pb2.ListJoinedGroupsRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.ListJoinedGroupsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetGroupInfo(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/GetGroupInfo',
+            fastmeow_dot_v1_dot_gateway__pb2.GetGroupInfoRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.GetGroupInfoResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PreviewGroupInvite(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/PreviewGroupInvite',
+            fastmeow_dot_v1_dot_gateway__pb2.PreviewGroupInviteRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.PreviewGroupInviteResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def JoinGroupViaInvite(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/JoinGroupViaInvite',
+            fastmeow_dot_v1_dot_gateway__pb2.JoinGroupViaInviteRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.JoinGroupViaInviteResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def LeaveGroup(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/LeaveGroup',
+            fastmeow_dot_v1_dot_gateway__pb2.LeaveGroupRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.LeaveGroupResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CreateGroup(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/CreateGroup',
+            fastmeow_dot_v1_dot_gateway__pb2.CreateGroupRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.CreateGroupResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateGroupSettings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/UpdateGroupSettings',
+            fastmeow_dot_v1_dot_gateway__pb2.UpdateGroupSettingsRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.UpdateGroupSettingsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateGroupParticipants(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/UpdateGroupParticipants',
+            fastmeow_dot_v1_dot_gateway__pb2.UpdateGroupParticipantsRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.UpdateGroupParticipantsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetGroupInviteLink(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/GetGroupInviteLink',
+            fastmeow_dot_v1_dot_gateway__pb2.GetGroupInviteLinkRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.GetGroupInviteLinkResponse.FromString,
             options,
             channel_credentials,
             insecure,

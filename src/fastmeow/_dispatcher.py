@@ -23,13 +23,19 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 
 from .context import AccountClient, Ctx
 from .exceptions import BackpressureError
 from .router import Router
-from .types import Event, SendResult
+from .types import (
+    Event,
+    GroupInfo,
+    GroupParticipantAction,
+    GroupParticipantUpdateResult,
+    SendResult,
+)
 
 if False:  # TYPE_CHECKING
     from ._transport import Transport
@@ -70,6 +76,123 @@ class _BoundClient:
             body=body,
             client_msg_id=client_msg_id,
             reply_to_message_id=reply_to_message_id,
+        )
+
+    # -- 群组（Phase 4.1）-----------------------------------------------
+
+    async def list_groups(self) -> tuple[GroupInfo, ...]:
+        return await self._transport.list_joined_groups(self.account_key)
+
+    async def get_group_info(self, group_jid: str) -> GroupInfo:
+        return await self._transport.get_group_info(
+            account_key=self.account_key,
+            group_jid=group_jid,
+        )
+
+    async def preview_group_invite(self, invite_link_or_code: str) -> GroupInfo:
+        return await self._transport.preview_group_invite(
+            account_key=self.account_key,
+            invite_link=invite_link_or_code,
+        )
+
+    async def join_group(self, invite_link_or_code: str) -> str:
+        return await self._transport.join_group_via_invite(
+            account_key=self.account_key,
+            invite_link=invite_link_or_code,
+        )
+
+    async def leave_group(self, group_jid: str) -> None:
+        await self._transport.leave_group(
+            account_key=self.account_key,
+            group_jid=group_jid,
+        )
+
+    async def create_group(
+        self, name: str, participants: Sequence[str] = ()
+    ) -> GroupInfo:
+        return await self._transport.create_group(
+            account_key=self.account_key,
+            name=name,
+            participant_jids=tuple(participants),
+        )
+
+    async def set_group_name(self, group_jid: str, name: str) -> GroupInfo:
+        return await self._transport.update_group_settings(
+            account_key=self.account_key,
+            group_jid=group_jid,
+            name=name,
+        )
+
+    async def set_group_topic(self, group_jid: str, topic: str) -> GroupInfo:
+        return await self._transport.update_group_settings(
+            account_key=self.account_key,
+            group_jid=group_jid,
+            topic=topic,
+        )
+
+    async def set_group_announce(
+        self, group_jid: str, announce: bool
+    ) -> GroupInfo:
+        return await self._transport.update_group_settings(
+            account_key=self.account_key,
+            group_jid=group_jid,
+            is_announce=announce,
+        )
+
+    async def set_group_locked(self, group_jid: str, locked: bool) -> GroupInfo:
+        return await self._transport.update_group_settings(
+            account_key=self.account_key,
+            group_jid=group_jid,
+            is_locked=locked,
+        )
+
+    async def add_group_participants(
+        self, group_jid: str, jids: Sequence[str]
+    ) -> tuple[GroupParticipantUpdateResult, ...]:
+        return await self._transport.update_group_participants(
+            account_key=self.account_key,
+            group_jid=group_jid,
+            action=GroupParticipantAction.ADD,
+            participant_jids=tuple(jids),
+        )
+
+    async def remove_group_participants(
+        self, group_jid: str, jids: Sequence[str]
+    ) -> tuple[GroupParticipantUpdateResult, ...]:
+        return await self._transport.update_group_participants(
+            account_key=self.account_key,
+            group_jid=group_jid,
+            action=GroupParticipantAction.REMOVE,
+            participant_jids=tuple(jids),
+        )
+
+    async def promote_group_participants(
+        self, group_jid: str, jids: Sequence[str]
+    ) -> tuple[GroupParticipantUpdateResult, ...]:
+        return await self._transport.update_group_participants(
+            account_key=self.account_key,
+            group_jid=group_jid,
+            action=GroupParticipantAction.PROMOTE,
+            participant_jids=tuple(jids),
+        )
+
+    async def demote_group_participants(
+        self, group_jid: str, jids: Sequence[str]
+    ) -> tuple[GroupParticipantUpdateResult, ...]:
+        return await self._transport.update_group_participants(
+            account_key=self.account_key,
+            group_jid=group_jid,
+            action=GroupParticipantAction.DEMOTE,
+            participant_jids=tuple(jids),
+        )
+
+    async def get_group_invite_link(
+        self, group_jid: str, *, revoke: bool = False
+    ) -> str:
+        return await self._transport.get_group_invite_link(
+            account_key=self.account_key,
+            group_jid=group_jid,
+            reset=revoke,
         )
 
 

@@ -1,4 +1,4 @@
-// FastMeow Gateway API — 最小 Phase 1 合约。
+// FastMeow Gateway API — Phase 1 + 4.1 合约。
 //
 // 稳定性：此文件是 Python SDK 与 Go sidecar 之间的公共边界。
 // 一旦标记为 v1.0，允许添加（新 RPC、新事件变体、新可选字段），
@@ -9,11 +9,18 @@
 //   - QR 配对 + 文本消息发送/接收。
 //   - 服务端流式事件（无双向流，默认无软事件）。
 //
-// 不在 Phase 1 范围内（保留字段编号以备后用）：
-//   - 媒体（图片/音频/视频/文档）发送与接收。
+// Phase 4.1 范围（本次增量，wire 兼容）：
+//   - 群组只读元数据：list / get / preview-invite。
+//   - 群组写操作：create / leave / join-via-invite / update-settings /
+//     update-participants / invite-link 取回。
+//   - 三类群组事件：JoinedGroupEvent / GroupInfoEvent /
+//     GroupParticipantUpdateEvent（占用 oneof tag 16/17/18）。
+//
+// 不在当前范围内（保留字段编号以备后用）：
+//   - 媒体（图片/音频/视频/文档）发送与接收（Phase 4.3）。
 //   - 回应 (Reactions)、编辑、撤回。
-//   - 回执、在线状态、群组元数据。
-//   - 分片 sidecar 协同（Phase 1 中仅单个 sidecar_id="default"）。
+//   - 回执、在线状态（Phase 4.2）。
+//   - 分片 sidecar 协同（仅单个 sidecar_id="default"）。
 
 syntax = "proto3";
 
@@ -62,6 +69,55 @@ service GatewayService {
   // 顺序：给定 (account_key, chat_jid) 对的事件按单调递增的 seq 顺序发出。
   // 不保证跨聊天顺序。
   rpc StreamEvents(StreamEventsRequest) returns (stream StreamEventsResponse);
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // Group RPCs (Phase 4.1)
+  // ───────────────────────────────────────────────────────────────────────────
+  //
+  // 设计要点：
+  //   - 所有读 RPC 直接命中 whatsmeow 的本地缓存或服务端拉取，sidecar 不缓存。
+  //   - 所有写 RPC 由用户主动触发，不做幂等键去重（与 SendMessage 不同）；
+  //     重复调用会向 WhatsApp 重复发送，由调用方负责。
+  //   - 错误映射：JID 非法 → INVALID_ARGUMENT；账号未连接 → FAILED_PRECONDITION；
+  //     whatsmeow 业务错误（403/不在群里/被踢等）→ PERMISSION_DENIED 或 NOT_FOUND；
+  //     其他网络/服务端错误 → UNAVAILABLE 并附带原始错误文本。
+
+  // 列出该账号当前加入的所有群（whatsmeow GetJoinedGroups）。
+  rpc ListJoinedGroups(ListJoinedGroupsRequest) returns (ListJoinedGroupsResponse);
+
+  // 获取单个群的完整元数据（whatsmeow GetGroupInfo）。
+  // 如果账号不在该群，返回 NOT_FOUND。
+  rpc GetGroupInfo(GetGroupInfoRequest) returns (GetGroupInfoResponse);
+
+  // 通过邀请链接预览群信息但不加入（whatsmeow GetGroupInfoFromLink）。
+  // 邀请链接形如 "https://chat.whatsapp.com/<code>"，code 部分会被自动剥取。
+  rpc PreviewGroupInvite(PreviewGroupInviteRequest) returns (PreviewGroupInviteResponse);
+
+  // 通过邀请链接加入群（whatsmeow JoinGroupWithLink）。
+  // 加入后 whatsmeow 会发出 GroupInfo 事件，由 bus 转发为 JoinedGroupEvent。
+  rpc JoinGroupViaInvite(JoinGroupViaInviteRequest) returns (JoinGroupViaInviteResponse);
+
+  // 离开群（whatsmeow LeaveGroup）。如果账号不在群里，返回 NOT_FOUND。
+  rpc LeaveGroup(LeaveGroupRequest) returns (LeaveGroupResponse);
+
+  // 创建新群（whatsmeow CreateGroup）。
+  // 至少需要一个除创建者外的初始参与者；whatsmeow 不允许创建只有自己的群。
+  rpc CreateGroup(CreateGroupRequest) returns (CreateGroupResponse);
+
+  // 修改群设置（名称/主题/announce/locked）。
+  // 仅允许修改请求中显式设置的字段，缺省字段保持不变。
+  // 各字段对应 whatsmeow 的 SetGroupName / SetGroupTopic /
+  // SetGroupAnnounce / SetGroupLocked。需要管理员权限。
+  rpc UpdateGroupSettings(UpdateGroupSettingsRequest) returns (UpdateGroupSettingsResponse);
+
+  // 添加 / 移除 / 提升 / 降级群成员（whatsmeow UpdateGroupParticipants）。
+  // 单次调用所有目标 JID 共享同一动作；混合动作请发起多次调用。
+  // 需要管理员权限。
+  rpc UpdateGroupParticipants(UpdateGroupParticipantsRequest) returns (UpdateGroupParticipantsResponse);
+
+  // 取回当前群的邀请链接（whatsmeow GetGroupInviteLink）。
+  // reset=true 时会失效旧链接并生成新链接。需要管理员权限。
+  rpc GetGroupInviteLink(GetGroupInviteLinkRequest) returns (GetGroupInviteLinkResponse);
 
   // 请求优雅停机。sidecar 将：
   //   1. 停止接受新的 RPC。
@@ -239,11 +295,14 @@ message StreamEventsResponse {
     PairSuccessEvent pair_success = 13;
     MessageEvent message = 14;
     LoggedOutEvent logged_out = 15;
+    JoinedGroupEvent joined_group = 16;
+    GroupInfoEvent group_info = 17;
+    GroupParticipantUpdateEvent group_participant_update = 18;
     UnknownEvent unknown = 99;
   }
 
   // 为未来的事件变体保留。
-  reserved 16 to 98;
+  reserved 19 to 98;
 }
 
 message ConnectedEvent {}
@@ -297,6 +356,115 @@ message UnknownEvent {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Group events (Phase 4.1)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// 这三类事件覆盖账号视角能感知的所有群组变更：
+//   - JoinedGroupEvent       账号自身加入了某个群（主动 / 被拉 / 创建）。
+//   - GroupInfoEvent         已加入群的元数据发生变化（改名、改头像、设置变更等）。
+//   - GroupParticipantUpdateEvent  群成员的 add / remove / promote / demote。
+//
+// 注意：账号"离开"群没有对应专用事件；whatsmeow 在这种情况下仅停止推送
+// 该群的事件流。Python 端可通过 ListJoinedGroups 周期性核对，或观察
+// GroupParticipantUpdateEvent 中本账号 JID 是否被 REMOVE。
+
+// 账号加入了某个群。group_info 字段携带加入瞬间的完整群信息快照。
+message JoinedGroupEvent {
+  GroupInfo group_info = 1;
+
+  // 加入原因。whatsmeow 透传字符串，未来可能新增取值。
+  // 已知值：
+  //   "invite_link"     通过邀请链接加入
+  //   "added_by_admin"  被管理员拉进群
+  //   "created"         自己创建的群
+  //   ""                whatsmeow 未提供具体原因
+  // 客户端应宽容处理未知字符串。
+  string join_reason = 2;
+}
+
+// 已加入群的元数据更新。完整新元数据放在 group_info 中，
+// 客户端应替换本地缓存而非 diff 合并。
+message GroupInfoEvent {
+  GroupInfo group_info = 1;
+}
+
+// 群成员变更。每次事件覆盖一个动作 + 一组目标 JID。
+// 例如管理员一次提升 3 个成员为管理员，会产生一次 action=PROMOTE，
+// participant_jids 携带 3 个 JID。
+message GroupParticipantUpdateEvent {
+  enum GroupParticipantAction {
+    GROUP_PARTICIPANT_ACTION_UNSPECIFIED = 0;
+    GROUP_PARTICIPANT_ACTION_ADD = 1;       // 添加新成员到群
+    GROUP_PARTICIPANT_ACTION_REMOVE = 2;    // 从群中移除成员
+    GROUP_PARTICIPANT_ACTION_PROMOTE = 3;   // 提升为管理员
+    GROUP_PARTICIPANT_ACTION_DEMOTE = 4;    // 降级为普通成员
+  }
+
+  string group_jid = 1;
+  GroupParticipantAction action = 2;
+
+  // 受影响的成员 JID 列表。至少 1 个。
+  repeated string participant_jids = 3;
+
+  // 触发此次变更的操作者 JID（管理员 / 自己 / 系统）。
+  // 可能为空，例如系统级变更或 whatsmeow 未提供来源。
+  string actor_jid = 4;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Group shared messages (Phase 4.1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 群组完整元数据。list / get / events 共用此 schema。
+// 字段全集对应 whatsmeow types.GroupInfo 主要字段。
+// 后续 Phase 可向此 message 追加新字段（wire 兼容），但禁止删除现有字段。
+message GroupInfo {
+  // 群 JID，形如 "<creation-ts>-<random>@g.us"。
+  string jid = 1;
+
+  // 群名（subject）。可能为空。
+  string name = 2;
+
+  // 群主题（description）。可能为空。
+  string topic = 3;
+
+  // 创建者 JID。可能为空（whatsmeow 在某些边缘情况下不返回）。
+  string owner_jid = 4;
+
+  // 创建时间。
+  google.protobuf.Timestamp creation_timestamp = 5;
+
+  // 当前所有成员（包括自己）。顺序未定义，调用方按需排序。
+  repeated GroupParticipant participants = 6;
+
+  // announce 模式：仅管理员可发消息。
+  bool is_announce = 7;
+
+  // locked 模式：仅管理员可修改群信息。
+  bool is_locked = 8;
+
+  // 阅后即焚开关。
+  bool is_ephemeral = 9;
+
+  // 阅后即焚消息有效期，单位秒。仅当 is_ephemeral=true 时有意义。
+  uint32 ephemeral_duration_seconds = 10;
+
+  // 加入审批模式。whatsmeow 透传字符串，未来可能新增取值。
+  // 已知值：
+  //   "admin_add"          仅管理员可拉人入群
+  //   "request_required"   非管理员申请入群需审批
+  //   ""                   whatsmeow 未提供（无审批要求或字段缺失）
+  // 客户端应宽容处理未知字符串。
+  string membership_approval_mode = 11;
+}
+
+message GroupParticipant {
+  string jid = 1;
+  bool is_admin = 2;
+  bool is_super_admin = 3;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Lifecycle (生命周期)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -307,3 +475,123 @@ message ShutdownRequest {
 }
 
 message ShutdownResponse {}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Group RPC messages (Phase 4.1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+message ListJoinedGroupsRequest {
+  string account_key = 1;
+}
+
+message ListJoinedGroupsResponse {
+  repeated GroupInfo groups = 1;
+}
+
+message GetGroupInfoRequest {
+  string account_key = 1;
+  string group_jid = 2;
+}
+
+message GetGroupInfoResponse {
+  GroupInfo group_info = 1;
+}
+
+message PreviewGroupInviteRequest {
+  string account_key = 1;
+  // 完整邀请链接 "https://chat.whatsapp.com/<code>" 或纯 code。
+  string invite_link = 2;
+}
+
+message PreviewGroupInviteResponse {
+  GroupInfo group_info = 1;
+}
+
+message JoinGroupViaInviteRequest {
+  string account_key = 1;
+  // 完整邀请链接 "https://chat.whatsapp.com/<code>" 或纯 code。
+  string invite_link = 2;
+}
+
+message JoinGroupViaInviteResponse {
+  // 加入后的群 JID。完整群信息会通过事件流以 JoinedGroupEvent 推送。
+  string group_jid = 1;
+}
+
+message LeaveGroupRequest {
+  string account_key = 1;
+  string group_jid = 2;
+}
+
+message LeaveGroupResponse {}
+
+message CreateGroupRequest {
+  string account_key = 1;
+  // 群名（subject）。必填。
+  string name = 2;
+  // 初始参与者 JID 列表。至少 1 个（不含创建者本身）。
+  repeated string participant_jids = 3;
+}
+
+message CreateGroupResponse {
+  GroupInfo group_info = 1;
+}
+
+message UpdateGroupSettingsRequest {
+  string account_key = 1;
+  string group_jid = 2;
+
+  // 仅在请求中显式设置的字段才会被修改；缺省字段保持不变。
+  // 使用 google.protobuf.StringValue 等 wrapper 太重，这里用配套 has_* 布尔。
+  string name = 3;
+  bool has_name = 4;
+
+  string topic = 5;
+  bool has_topic = 6;
+
+  bool is_announce = 7;
+  bool has_is_announce = 8;
+
+  bool is_locked = 9;
+  bool has_is_locked = 10;
+}
+
+message UpdateGroupSettingsResponse {
+  // 修改后的完整群信息。
+  GroupInfo group_info = 1;
+}
+
+message UpdateGroupParticipantsRequest {
+  string account_key = 1;
+  string group_jid = 2;
+  GroupParticipantUpdateEvent.GroupParticipantAction action = 3;
+  // 目标成员 JID。至少 1 个。
+  repeated string participant_jids = 4;
+}
+
+message UpdateGroupParticipantsResponse {
+  // whatsmeow 对每个 JID 单独返回结果。
+  repeated GroupParticipantUpdateResult results = 1;
+}
+
+// 单个目标成员的更新结果。
+// success=false 时 error_code / error_message 描述失败原因
+// （例如 "403" 表示该成员屏蔽了添加请求）。
+message GroupParticipantUpdateResult {
+  string jid = 1;
+  bool success = 2;
+  string error_code = 3;
+  string error_message = 4;
+}
+
+message GetGroupInviteLinkRequest {
+  string account_key = 1;
+  string group_jid = 2;
+  // 是否失效旧链接并生成新链接。
+  bool reset = 3;
+}
+
+message GetGroupInviteLinkResponse {
+  // 完整链接 "https://chat.whatsapp.com/<code>"。
+  string invite_link = 1;
+}

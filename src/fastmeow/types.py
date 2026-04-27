@@ -34,6 +34,13 @@ __all__ = [
     "ConnectedEvent",
     "DisconnectedEvent",
     "Event",
+    "GroupInfo",
+    "GroupInfoEvent",
+    "GroupParticipant",
+    "GroupParticipantAction",
+    "GroupParticipantUpdateEvent",
+    "GroupParticipantUpdateResult",
+    "JoinedGroupEvent",
     "LoggedOutEvent",
     "MessageEvent",
     "PairSuccessEvent",
@@ -221,6 +228,170 @@ class QREvent(_EventBase):
         return buf.getvalue()
 
 
+# ---------------------------------------------------------------------------
+# Groups（Phase 4.1）
+# ---------------------------------------------------------------------------
+
+
+class GroupParticipantAction(StrEnum):
+    """``UpdateGroupParticipants`` / ``GroupParticipantUpdateEvent`` 的动作类型。
+
+    值镜像了 proto 嵌套 enum
+    ``GroupParticipantUpdateEvent.GroupParticipantAction``，但使用纯字符串
+    成员，便于日志/序列化。
+    """
+
+    UNSPECIFIED = "UNSPECIFIED"
+    ADD = "ADD"
+    REMOVE = "REMOVE"
+    PROMOTE = "PROMOTE"
+    DEMOTE = "DEMOTE"
+
+    @classmethod
+    def from_proto(cls, value: int) -> GroupParticipantAction:
+        """将 proto 枚举整数（``GROUP_PARTICIPANT_ACTION_*``）映射到本类。"""
+        from fastmeow._generated.fastmeow.v1 import gateway_pb2 as pb
+
+        try:
+            name = pb.GroupParticipantUpdateEvent.GroupParticipantAction.Name(value)
+        except ValueError:
+            # 未知 proto 值（旧客户端 + 新 sidecar 时可能出现），降级为 UNSPECIFIED。
+            return cls.UNSPECIFIED
+        suffix = name.removeprefix("GROUP_PARTICIPANT_ACTION_")
+        try:
+            return cls(suffix)
+        except ValueError:
+            return cls.UNSPECIFIED
+
+    def to_proto(self) -> int:
+        """将本枚举映射为 proto 枚举整数。"""
+        from fastmeow._generated.fastmeow.v1 import gateway_pb2 as pb
+
+        return int(
+            pb.GroupParticipantUpdateEvent.GroupParticipantAction.Value(
+                f"GROUP_PARTICIPANT_ACTION_{self.value}"
+            )
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class GroupParticipant:
+    """群组成员，附带管理员标志。"""
+
+    jid: str
+    is_admin: bool = False
+    is_super_admin: bool = False
+
+    @classmethod
+    def from_proto(cls, msg: _pb.GroupParticipant) -> GroupParticipant:
+        return cls(
+            jid=msg.jid,
+            is_admin=msg.is_admin,
+            is_super_admin=msg.is_super_admin,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class GroupInfo:
+    """群组的不可变快照。
+
+    ``creation_timestamp`` 由 sidecar 以 ``int64`` 秒为单位发送（0 表示未知）；
+    我们将其规整为带时区的 ``datetime | None``。
+
+    ``membership_approval_mode`` 是 sidecar 直接透传的字符串
+    （``"on"`` / ``"off"`` / ``""``），原样保留以避免在不熟悉的 WhatsApp
+    枚举上做有损转换。
+    """
+
+    jid: str
+    name: str
+    topic: str
+    owner_jid: str
+    creation_time: datetime | None
+    participants: tuple[GroupParticipant, ...]
+    is_announce: bool
+    is_locked: bool
+    is_ephemeral: bool
+    ephemeral_duration_seconds: int
+    membership_approval_mode: str
+
+    @classmethod
+    def from_proto(cls, msg: _pb.GroupInfo) -> GroupInfo:
+        ct: datetime | None = None
+        if msg.HasField("creation_timestamp"):
+            ct = msg.creation_timestamp.ToDatetime(tzinfo=UTC)
+        return cls(
+            jid=msg.jid,
+            name=msg.name,
+            topic=msg.topic,
+            owner_jid=msg.owner_jid,
+            creation_time=ct,
+            participants=tuple(GroupParticipant.from_proto(p) for p in msg.participants),
+            is_announce=msg.is_announce,
+            is_locked=msg.is_locked,
+            is_ephemeral=msg.is_ephemeral,
+            ephemeral_duration_seconds=msg.ephemeral_duration_seconds,
+            membership_approval_mode=msg.membership_approval_mode,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class GroupParticipantUpdateResult:
+    """单个成员更新的逐条结果。
+
+    ``error_code`` 为 sidecar 透传的 whatsmeow 数值错误码字符串
+    （例如 ``"403"`` / ``"409"``）；``success=True`` 时为空。
+    """
+
+    jid: str
+    success: bool
+    error_code: str = ""
+    error_message: str = ""
+
+    @classmethod
+    def from_proto(
+        cls, msg: _pb.GroupParticipantUpdateResult
+    ) -> GroupParticipantUpdateResult:
+        return cls(
+            jid=msg.jid,
+            success=msg.success,
+            error_code=msg.error_code,
+            error_message=msg.error_message,
+        )
+
+
+# ---------------------------------------------------------------------------
+# Group events（Phase 4.1）
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class JoinedGroupEvent(_EventBase):
+    """当前账号刚刚加入或被加入到一个新群组。"""
+
+    group_info: GroupInfo
+    join_reason: str = ""
+    """加入原因（sidecar 透传，可能为空字符串）。"""
+
+
+@dataclass(frozen=True, slots=True)
+class GroupInfoEvent(_EventBase):
+    """已加入群组的元数据发生变化（名称 / 话题 / 设置）。"""
+
+    group_info: GroupInfo
+
+
+@dataclass(frozen=True, slots=True)
+class GroupParticipantUpdateEvent(_EventBase):
+    """已加入群组的成员构成发生变化。"""
+
+    group_jid: str
+    action: GroupParticipantAction
+    participant_jids: tuple[str, ...]
+    actor_jid: str = ""
+    """触发该变更的成员 JID；可能为空（系统动作）。"""
+
+
 @dataclass(frozen=True, slots=True)
 class UnknownEvent(_EventBase):
     """sidecar 发出但 FastMeow 没有对应类型包装器的事件。
@@ -240,6 +411,9 @@ Event = (
     | PairSuccessEvent
     | LoggedOutEvent
     | QREvent
+    | JoinedGroupEvent
+    | GroupInfoEvent
+    | GroupParticipantUpdateEvent
     | UnknownEvent
 )
 
@@ -341,6 +515,28 @@ def event_from_proto(msg: _pb.StreamEventsResponse) -> Event | None:
         )
     if which == "unknown":
         return UnknownEvent(**base, go_type=msg.unknown.go_type)
+    if which == "joined_group":
+        jg = msg.joined_group
+        return JoinedGroupEvent(
+            **base,
+            group_info=GroupInfo.from_proto(jg.group_info),
+            join_reason=jg.join_reason,
+        )
+    if which == "group_info":
+        gi = msg.group_info
+        return GroupInfoEvent(
+            **base,
+            group_info=GroupInfo.from_proto(gi.group_info),
+        )
+    if which == "group_participant_update":
+        gp = msg.group_participant_update
+        return GroupParticipantUpdateEvent(
+            **base,
+            group_jid=gp.group_jid,
+            action=GroupParticipantAction.from_proto(gp.action),
+            participant_jids=tuple(gp.participant_jids),
+            actor_jid=gp.actor_jid,
+        )
     return None
 
 

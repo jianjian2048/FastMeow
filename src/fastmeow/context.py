@@ -17,7 +17,8 @@ FastMeow 中的处理器具有以下签名之一：:
 * ``account_key`` — 派发此事件的账号。
 * ``account_jid`` — 观察到事件时该账号的 JID。
 * ``event``       — 公开事件对象（当处理器同时接受两个参数时，与绑定到 ``msg`` 的对象相同）。
-* ``client``      — 绑定到 ``account_key`` 的 :class:`AccountClient`；用它来发送任意消息。
+* ``client``      — 绑定到 ``account_key`` 的 :class:`AccountClient`；
+                    用它来发送任意消息或执行群组管理操作。
 * ``reply()``     — 针对非常常见的“在同一聊天中回复”情况的便捷方法。
                     **仅**在事件为 :class:`MessageEvent` 时可用；
                     否则会抛出 :class:`ReplyNotAvailableError`，
@@ -29,11 +30,18 @@ Ctx 实例由派发器创建，并在处理器返回后销毁。
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
 from fastmeow.exceptions import ReplyNotAvailableError
-from fastmeow.types import Event, MessageEvent, SendResult
+from fastmeow.types import (
+    Event,
+    GroupInfo,
+    GroupParticipantUpdateResult,
+    MessageEvent,
+    SendResult,
+)
 
 if TYPE_CHECKING:
     pass
@@ -73,6 +81,74 @@ class AccountClient(Protocol):
         """
         ...
 
+    # -- 群组（Phase 4.1） ---------------------------------------------
+
+    async def list_groups(self) -> tuple[GroupInfo, ...]:
+        """列出此账号已加入的所有群组。"""
+        ...
+
+    async def get_group_info(self, group_jid: str) -> GroupInfo:
+        """获取群组的元数据快照。"""
+        ...
+
+    async def preview_group_invite(self, invite_link_or_code: str) -> GroupInfo:
+        """预览邀请链接（或裸邀请码）背后的群组而不加入。
+
+        接受完整 URL（``https://chat.whatsapp.com/<code>``）或裸邀请码；
+        sidecar 自行归一化。
+        """
+        ...
+
+    async def join_group(self, invite_link_or_code: str) -> str:
+        """通过邀请链接 / 邀请码加入群组，返回群组 JID。"""
+        ...
+
+    async def leave_group(self, group_jid: str) -> None:
+        """退出群组。"""
+        ...
+
+    async def create_group(
+        self, name: str, participants: Sequence[str] = ()
+    ) -> GroupInfo:
+        """创建新群组并初始化成员（不含创建者；creator 自动加入）。"""
+        ...
+
+    async def set_group_name(self, group_jid: str, name: str) -> GroupInfo: ...
+
+    async def set_group_topic(self, group_jid: str, topic: str) -> GroupInfo: ...
+
+    async def set_group_announce(
+        self, group_jid: str, announce: bool
+    ) -> GroupInfo:
+        """设置群组是否为“仅管理员发言”模式。"""
+        ...
+
+    async def set_group_locked(self, group_jid: str, locked: bool) -> GroupInfo:
+        """设置群组是否锁定群信息编辑（仅管理员可改名 / 改头像 / 改话题）。"""
+        ...
+
+    async def add_group_participants(
+        self, group_jid: str, jids: Sequence[str]
+    ) -> tuple[GroupParticipantUpdateResult, ...]: ...
+
+    async def remove_group_participants(
+        self, group_jid: str, jids: Sequence[str]
+    ) -> tuple[GroupParticipantUpdateResult, ...]: ...
+
+    async def promote_group_participants(
+        self, group_jid: str, jids: Sequence[str]
+    ) -> tuple[GroupParticipantUpdateResult, ...]: ...
+
+    async def demote_group_participants(
+        self, group_jid: str, jids: Sequence[str]
+    ) -> tuple[GroupParticipantUpdateResult, ...]: ...
+
+    async def get_group_invite_link(
+        self, group_jid: str, *, revoke: bool = False
+    ) -> str:
+        """获取群组邀请链接。``revoke=True`` 时撤销旧链接并生成新链接。"""
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class Ctx:
@@ -86,6 +162,7 @@ class Ctx:
 
     响应 :class:`MessageEvent` 时请使用 :meth:`reply`。
     对于任何其他外发流量（广播、跨聊天回复、定时消息等），请使用 :meth:`send`。
+    群组管理操作请使用 :attr:`client`（例如 ``ctx.client.set_group_name(...)``）。
     """
 
     account_key: str

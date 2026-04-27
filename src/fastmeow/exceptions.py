@@ -137,3 +137,55 @@ class BackpressureError(DispatchError):
     派发器改为采取尽早失败策略：它会记录详细日志、设置全局停止标志，
     并在受影响的路径上抛出此异常，使应用显式停止。一旦引入非关键事件类，可能会恢复选择性丢弃机制。
     """
+
+
+class ContextOperationNotAvailableError(DispatchError):
+    """在不适用的事件上下文中调用了仅对特定事件类型可用的 ``Ctx`` 方法。
+
+    例如 ``ctx.send_typing()`` / ``ctx.mark_read()`` / 群组捷径方法只在
+    :class:`MessageEvent` 派发上下文中可用；在 Connected / QR / Disconnected
+    等派发中调用应该立即失败而非访问 ``ctx.client``，以便用户尽早看到错误。
+
+    此异常与 :class:`ReplyNotAvailableError` 同级（都是 ``DispatchError``
+    子类）；区别仅在于错误信息更通用，覆盖第 4 阶段引入的所有上下文受限方法。
+    """
+
+
+# ---------------------------------------------------------------------------
+# 群组（Phase 4.1）
+# ---------------------------------------------------------------------------
+
+
+class GroupError(FastMeowError):
+    """群组操作失败的基类。
+
+    所有 9 个群组 RPC（list/get/preview/join/leave/create/update_settings/
+    update_participants/get_invite_link）的失败都最终落到此类或其子类。
+    sidecar 用 gRPC 状态码区分细类，Python 端根据 ``op`` + status code
+    + detail 关键词进一步细化（参见 ``_transport._translate``）。
+    """
+
+
+class InviteLinkInvalidError(GroupError):
+    """邀请链接 / 邀请码格式非法或不被 WhatsApp 接受。
+
+    对应 sidecar ``ErrInviteLinkInvalid`` → ``INVALID_ARGUMENT`` + detail
+    中含 "invite"。
+    """
+
+
+class InviteLinkRevokedError(GroupError):
+    """邀请链接已被群管理员撤销 / 重置。
+
+    对应 sidecar ``ErrInviteLinkRevoked`` → ``NOT_FOUND`` + detail 中含
+    "invite"。
+    """
+
+
+class GroupPermissionError(GroupError):
+    """当前账号无权执行该群组操作。
+
+    例如非管理员尝试改群名 / 加成员，或被踢出群后尝试操作。对应 sidecar
+    ``ErrNotInGroup`` / ``ErrGroupInviteLinkUnauthorized`` →
+    ``PERMISSION_DENIED``。
+    """

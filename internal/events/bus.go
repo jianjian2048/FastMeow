@@ -55,6 +55,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/jianjian2048/fastmeow/gen/go/fastmeow/v1"
+	"github.com/jianjian2048/fastmeow/internal/groups"
 )
 
 // DefaultBufferSize 是事件总线通道的深度。大小设定为能够承载
@@ -127,18 +128,27 @@ func (b *Bus) Close() {
 // Sink 是 accounts 包附加到每个 whatsmeow.Client 的 EventSink 回调。
 // 它由 whatsmeow 的 dispatchEvent goroutine 同步调用，
 // 因此绝不能阻塞。
+//
+// 单个 whatsmeow 事件可能映射为多个 wire 事件（最典型的是
+// *events.GroupInfo 同时携带元数据变更与成员变更，会被拆成
+// 一个 GroupInfoEvent + 若干 GroupParticipantUpdateEvent），
+// 因此 translate 返回切片而非单值。
 func (b *Bus) Sink(accountKey string, evt any) {
-	resp := b.translate(accountKey, evt)
-	if resp == nil {
+	resps := b.translate(accountKey, evt)
+	if len(resps) == 0 {
 		return
 	}
 	// 在发出之前更新缓存的 JID，以便发出的消息携带它。
 	if ps, ok := evt.(*events.PairSuccess); ok {
 		b.setJID(accountKey, ps.ID.String())
 		// 现在知道了 JID，重新进行标记。
-		resp.AccountJid = ps.ID.String()
+		for _, r := range resps {
+			r.AccountJid = ps.ID.String()
+		}
 	}
-	b.emit(resp)
+	for _, r := range resps {
+		b.emit(r)
+	}
 }
 
 // PumpQRChannel 从 whatsmeow 的 QR 通道读取 QRChannelItem 值，
@@ -213,29 +223,38 @@ func (b *Bus) getJID(accountKey string) string {
 	return b.jids[accountKey]
 }
 
-// translate 将 whatsmeow 事件映射为 *pb.StreamEventsResponse。
-// 对于我们特意丢弃的事件，返回 nil（第一阶段忽略软状态事件）。
-func (b *Bus) translate(accountKey string, evt any) *pb.StreamEventsResponse {
-	base := &pb.StreamEventsResponse{AccountKey: accountKey}
+// translate 将 whatsmeow 事件映射为 wire 事件切片。一次源事件
+// 可能产生 0 / 1 / N 条 wire 事件：
+//   - 0：第一阶段忽略的软状态事件（HistorySync 等）。
+//   - 1：连接状态变化、消息、元数据更新等多数情况。
+//   - N：*events.GroupInfo 同时携带元数据 + 成员变更，会被拆开。
+func (b *Bus) translate(accountKey string, evt any) []*pb.StreamEventsResponse {
+	mk := func() *pb.StreamEventsResponse {
+		return &pb.StreamEventsResponse{AccountKey: accountKey}
+	}
 
 	switch e := evt.(type) {
 	case *events.Connected:
+		base := mk()
 		base.Event = &pb.StreamEventsResponse_Connected{Connected: &pb.ConnectedEvent{}}
-		return base
+		return []*pb.StreamEventsResponse{base}
 
 	case *events.Disconnected:
+		base := mk()
 		base.Event = &pb.StreamEventsResponse_Disconnected{
 			Disconnected: &pb.DisconnectedEvent{Reason: "disconnected"},
 		}
-		return base
+		return []*pb.StreamEventsResponse{base}
 
 	case *events.LoggedOut:
+		base := mk()
 		base.Event = &pb.StreamEventsResponse_LoggedOut{
 			LoggedOut: &pb.LoggedOutEvent{Reason: loggedOutReason(e)},
 		}
-		return base
+		return []*pb.StreamEventsResponse{base}
 
 	case *events.PairSuccess:
+		base := mk()
 		base.Event = &pb.StreamEventsResponse_PairSuccess{
 			PairSuccess: &pb.PairSuccessEvent{
 				Jid:          e.ID.String(),
@@ -243,15 +262,31 @@ func (b *Bus) translate(accountKey string, evt any) *pb.StreamEventsResponse {
 				Platform:     e.Platform,
 			},
 		}
-		return base
+		return []*pb.StreamEventsResponse{base}
 
 	case *events.Message:
 		me := messageEvent(e)
 		if me == nil {
 			return nil // 第一阶段不支持的消息类型（例如仅包含媒体）
 		}
+		base := mk()
 		base.Event = &pb.StreamEventsResponse_Message{Message: me}
-		return base
+		return []*pb.StreamEventsResponse{base}
+
+	case *events.JoinedGroup:
+		// 账号自身加入或被拉入群。group_info 携带加入瞬间的快照；
+		// reason 透传 whatsmeow 字段（已知值见 proto 注释）。
+		base := mk()
+		base.Event = &pb.StreamEventsResponse_JoinedGroup{
+			JoinedGroup: &pb.JoinedGroupEvent{
+				GroupInfo:  groups.GroupInfoToProto(&e.GroupInfo),
+				JoinReason: e.Reason,
+			},
+		}
+		return []*pb.StreamEventsResponse{base}
+
+	case *events.GroupInfo:
+		return translateGroupInfoEvent(accountKey, e)
 
 	// 第一阶段：显式丢弃这些嘈杂的软状态事件。它们在配对后会爆发式触发
 	// （历史同步可能会发出数十个），而在 v1 版本中 Python 业务代码并不关心它们。
@@ -273,11 +308,109 @@ func (b *Bus) translate(accountKey string, evt any) *pb.StreamEventsResponse {
 		// 第一阶段：将无法识别的事件表现为 UnknownEvent，以便 Python 端
 		// 可以看到正在流动的事件，而无需我们预先翻译每一个变体。
 		// 生产环境的 wheel 可能会在调试标志位后将其切换为空操作。
+		base := mk()
 		base.Event = &pb.StreamEventsResponse_Unknown{
 			Unknown: &pb.UnknownEvent{GoType: fmt.Sprintf("%T", evt)},
 		}
-		return base
+		return []*pb.StreamEventsResponse{base}
 	}
+}
+
+// translateGroupInfoEvent 把 *events.GroupInfo 拆成 0..N 个 wire 事件。
+// whatsmeow 的 GroupInfo 是一个「联合事件」：它可能同时携带元数据变更
+// （Name / Topic / Locked / Announce / Ephemeral / MembershipApprovalMode 任一非 nil）
+// 与四个独立的成员变更切片（Join / Leave / Promote / Demote）。
+//
+// 我们的 wire 协议把这二者拆开：
+//   - 任一元数据 pointer 非 nil → 发一条 GroupInfoEvent（携带刚 fetch 的最新快照）。
+//   - 每个非空成员切片 → 发一条 GroupParticipantUpdateEvent，action 用对应枚举。
+//
+// 元数据快照的获取：whatsmeow 在 GroupInfo 事件里只给出「变化的子结构」，
+// 而 wire 协议要求 GroupInfoEvent.group_info 是完整 GroupInfo。Phase 4.1
+// 的简化做法是仅用事件里已有的字段构造一个最小 GroupInfo（仅 jid + 改动字段），
+// 客户端可在收到事件后自行调用 GetGroupInfo 拿全量。
+// 这样避免在事件 sink 里发起额外网络往返（whatsmeow 的 dispatch 是同步的，
+// 在此处阻塞会拖垮所有账号的事件递送）。
+func translateGroupInfoEvent(accountKey string, e *events.GroupInfo) []*pb.StreamEventsResponse {
+	if e == nil {
+		return nil
+	}
+	out := make([]*pb.StreamEventsResponse, 0, 5)
+
+	hasMetadata := e.Name != nil || e.Topic != nil || e.Locked != nil ||
+		e.Announce != nil || e.Ephemeral != nil || e.MembershipApprovalMode != nil
+	if hasMetadata {
+		gi := &pb.GroupInfo{Jid: e.JID.String()}
+		if e.Name != nil {
+			gi.Name = e.Name.Name
+		}
+		if e.Topic != nil {
+			gi.Topic = e.Topic.Topic
+		}
+		if e.Locked != nil {
+			gi.IsLocked = e.Locked.IsLocked
+		}
+		if e.Announce != nil {
+			gi.IsAnnounce = e.Announce.IsAnnounce
+		}
+		if e.Ephemeral != nil {
+			gi.IsEphemeral = e.Ephemeral.IsEphemeral
+			gi.EphemeralDurationSeconds = e.Ephemeral.DisappearingTimer
+		}
+		if e.MembershipApprovalMode != nil {
+			// whatsmeow 在事件里把它解码成 bool；proto 决策是 string 透传
+			// 服务端原始枚举（"on" / "off"），SDK 用户可与 GetGroupInfo 返回的
+			// GroupInfo.membership_approval_mode 直接字符串比对而无需关心类型分裂。
+			if e.MembershipApprovalMode.IsJoinApprovalRequired {
+				gi.MembershipApprovalMode = "on"
+			} else {
+				gi.MembershipApprovalMode = "off"
+			}
+		}
+		out = append(out, &pb.StreamEventsResponse{
+			AccountKey: accountKey,
+			Event: &pb.StreamEventsResponse_GroupInfo{
+				GroupInfo: &pb.GroupInfoEvent{GroupInfo: gi},
+			},
+		})
+	}
+
+	// 成员变更：四个 slice 分别对应一个 action。
+	addParticipantUpdate := func(action pb.GroupParticipantUpdateEvent_GroupParticipantAction, jids []types.JID) {
+		if len(jids) == 0 {
+			return
+		}
+		participantStrs := make([]string, 0, len(jids))
+		for _, j := range jids {
+			participantStrs = append(participantStrs, j.String())
+		}
+		actorJID := ""
+		if e.Sender != nil {
+			actorJID = e.Sender.String()
+		}
+		out = append(out, &pb.StreamEventsResponse{
+			AccountKey: accountKey,
+			Event: &pb.StreamEventsResponse_GroupParticipantUpdate{
+				GroupParticipantUpdate: &pb.GroupParticipantUpdateEvent{
+					GroupJid:        e.JID.String(),
+					Action:          action,
+					ParticipantJids: participantStrs,
+					ActorJid:        actorJID,
+				},
+			},
+		})
+	}
+	addParticipantUpdate(pb.GroupParticipantUpdateEvent_GROUP_PARTICIPANT_ACTION_ADD, e.Join)
+	addParticipantUpdate(pb.GroupParticipantUpdateEvent_GROUP_PARTICIPANT_ACTION_REMOVE, e.Leave)
+	addParticipantUpdate(pb.GroupParticipantUpdateEvent_GROUP_PARTICIPANT_ACTION_PROMOTE, e.Promote)
+	addParticipantUpdate(pb.GroupParticipantUpdateEvent_GROUP_PARTICIPANT_ACTION_DEMOTE, e.Demote)
+
+	if len(out) == 0 {
+		// 既没有元数据变化也没有成员变化，可能是 link/unlink/delete
+		// 这类我们当前 wire 协议不暴露的子事件；忽略以免空噪声。
+		return nil
+	}
+	return out
 }
 
 // qrItemToResp 将 whatsmeow.QRChannelItem（QR 通道元素类型）

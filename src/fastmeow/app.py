@@ -44,8 +44,9 @@ from types import TracebackType
 from typing import Literal
 
 from . import _transport
-from ._dispatcher import Dispatcher, ErrorHook
+from ._dispatcher import Dispatcher, ErrorHook, _BoundClient
 from ._supervisor import Sidecar, SidecarConfig
+from .context import AccountClient
 from .exceptions import (
     AccountAlreadyExistsError,
     AccountError,
@@ -84,13 +85,19 @@ class AccountHandle:
     此句柄是事件驱动的：每当派发器看到 ``account_key`` 的事件时，:class:`FastMeow` 都会通知它。
     """
 
-    def __init__(self, account_key: str) -> None:
+    def __init__(
+        self,
+        account_key: str,
+        *,
+        transport: _transport.Transport | None = None,
+    ) -> None:
         self.account_key = account_key
         self._state: AccountState = AccountState.UNSPECIFIED
         self._jid: str = ""
         self._connected = asyncio.Event()
         self._terminal_failure: BaseException | None = None
         self._qr_subscribers: list[QRCallback] = []
+        self._transport = transport
 
     # -- 公开 API --------------------------------------------------------
 
@@ -101,6 +108,32 @@ class AccountHandle:
     @property
     def jid(self) -> str:
         return self._jid
+
+    @property
+    def client(self) -> AccountClient:
+        """此账号的账号作用域 RPC 客户端。
+
+        在处理器之外使用以发送消息或管理群组：
+        ``await handle.client.send_text(jid, "hi")``、
+        ``await handle.client.create_group("ops", participants=[...])``。
+
+        当账号事件改变 JID 时，``handle.jid`` 更新但此客户端仍保持有效 ——
+        每次属性访问都会重新构建一个绑定到当前 JID 的轻量级 :class:`_BoundClient`。
+
+        Raises:
+            RuntimeError: 如果在 :meth:`FastMeow.start` 之前访问。
+        """
+        if self._transport is None:
+            raise RuntimeError(
+                f"AccountHandle for {self.account_key!r} is not bound to a "
+                f"running FastMeow app yet; call app.start() (or use the async "
+                f"context manager) before app.add_account()."
+            )
+        return _BoundClient(
+            _transport=self._transport,
+            account_key=self.account_key,
+            jid=self._jid,
+        )
 
     def on_qr(self, callback: QRCallback) -> None:
         """除了传递给 :meth:`FastMeow.add_account` 的观察器外，再注册一个额外的 QR 观察器。"""
@@ -416,7 +449,7 @@ class FastMeow:
         if account_key in self._handles:
             raise AccountAlreadyExistsError(account_key)
 
-        handle = AccountHandle(account_key)
+        handle = AccountHandle(account_key, transport=self._transport)
         if on_qr is not None:
             handle.on_qr(_resolve_qr_callback(on_qr))
         self._handles[account_key] = handle

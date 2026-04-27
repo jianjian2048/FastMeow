@@ -52,6 +52,9 @@ from fastmeow.types import (
     ConnectedEvent,
     DisconnectedEvent,
     Event,
+    GroupInfoEvent,
+    GroupParticipantUpdateEvent,
+    JoinedGroupEvent,
     LoggedOutEvent,
     MessageEvent,
     PairSuccessEvent,
@@ -138,6 +141,9 @@ class Router:
         QREvent,
         PairSuccessEvent,
         LoggedOutEvent,
+        JoinedGroupEvent,
+        GroupInfoEvent,
+        GroupParticipantUpdateEvent,
         UnknownEvent,
     )
 
@@ -198,6 +204,20 @@ class Router:
 
     def logged_out(self, *filters: Filter) -> Callable[[HandlerFn], HandlerFn]:
         return self._make_decorator(LoggedOutEvent, filters)
+
+    def joined_group(self, *filters: Filter) -> Callable[[HandlerFn], HandlerFn]:
+        """为 :class:`JoinedGroupEvent` 注册处理器（账号加入新群组）。"""
+        return self._make_decorator(JoinedGroupEvent, filters)
+
+    def group_info(self, *filters: Filter) -> Callable[[HandlerFn], HandlerFn]:
+        """为 :class:`GroupInfoEvent` 注册处理器（已加入群组的元数据变更）。"""
+        return self._make_decorator(GroupInfoEvent, filters)
+
+    def group_participant_update(
+        self, *filters: Filter
+    ) -> Callable[[HandlerFn], HandlerFn]:
+        """为 :class:`GroupParticipantUpdateEvent` 注册处理器（群成员变更）。"""
+        return self._make_decorator(GroupParticipantUpdateEvent, filters)
 
     def unknown(self, *filters: Filter) -> Callable[[HandlerFn], HandlerFn]:
         """为未识别的事件注册兜底处理器。"""

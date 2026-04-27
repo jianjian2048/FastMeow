@@ -38,6 +38,7 @@ import (
 	pb "github.com/jianjian2048/fastmeow/gen/go/fastmeow/v1"
 	"github.com/jianjian2048/fastmeow/internal/accounts"
 	"github.com/jianjian2048/fastmeow/internal/events"
+	"github.com/jianjian2048/fastmeow/internal/groups"
 	"github.com/jianjian2048/fastmeow/internal/messages"
 	"github.com/jianjian2048/fastmeow/internal/sessions"
 )
@@ -107,6 +108,7 @@ func main() {
 		logJSON("fatal", map[string]any{"error": err.Error(), "stage": "messages.NewSender"})
 		os.Exit(1)
 	}
+	groupsHandler := groups.NewHandler()
 
 	lis, cleanup, err := newListener(*listenSpec)
 	if err != nil {
@@ -125,7 +127,7 @@ func main() {
 		grpc.MaxSendMsgSize(16*1024*1024),
 	)
 
-	gw := newGateway(*sidecarID, store, registry, bus, sender, rootLog.Sub("gw"))
+	gw := newGateway(*sidecarID, store, registry, bus, sender, groupsHandler, rootLog.Sub("gw"))
 	pb.RegisterGatewayServiceServer(srv, gw)
 
 	// 协同关闭：
@@ -211,6 +213,7 @@ type gateway struct {
 	registry   *accounts.Registry
 	bus        *events.Bus
 	sender     *messages.Sender
+	groups     *groups.Handler
 	log        waLog.Logger
 	shutdownCh chan struct{}
 	shutdownMu sync.Mutex
@@ -222,6 +225,7 @@ func newGateway(
 	registry *accounts.Registry,
 	bus *events.Bus,
 	sender *messages.Sender,
+	groupsHandler *groups.Handler,
 	log waLog.Logger,
 ) *gateway {
 	return &gateway{
@@ -230,6 +234,7 @@ func newGateway(
 		registry:   registry,
 		bus:        bus,
 		sender:     sender,
+		groups:     groupsHandler,
 		log:        log,
 		shutdownCh: make(chan struct{}),
 	}
@@ -479,6 +484,179 @@ func (g *gateway) Shutdown(_ context.Context, _ *pb.ShutdownRequest) (*pb.Shutdo
 		close(g.shutdownCh)
 	}
 	return &pb.ShutdownResponse{}, nil
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 群组 RPC（Phase 4.1）
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// 9 个群组 RPC 都共享相同的两步骤前缀：解析 account_key、从注册表取出
+// *whatsmeow.Client；之后委派给 internal/groups.Handler。错误统一通过
+// groupErrToStatus 映射到 gRPC code，避免每个 RPC 重复 switch。
+//
+// 注：whatsmeow.ErrGroupNotFound / ErrNotInGroup / ErrGroupInviteLinkUnauthorized
+// 等 sentinel 在 Phase 4.1 决策中被显式映射；具体值见
+// PHASE_4_PLAN 与 proto 注释。
+
+func (g *gateway) clientFor(key string) (*whatsmeow.Client, error) {
+	if key == "" {
+		return nil, status.Error(codes.InvalidArgument, "account_key is required")
+	}
+	acct, err := g.registry.Get(key)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "account %q not registered", key)
+	}
+	return acct.Client, nil
+}
+
+func (g *gateway) ListJoinedGroups(ctx context.Context, req *pb.ListJoinedGroupsRequest) (*pb.ListJoinedGroupsResponse, error) {
+	defer recoverPanic("ListJoinedGroups")
+	cli, err := g.clientFor(req.GetAccountKey())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := g.groups.ListJoinedGroups(ctx, cli)
+	if err != nil {
+		return nil, groupErrToStatus(err)
+	}
+	return resp, nil
+}
+
+func (g *gateway) GetGroupInfo(ctx context.Context, req *pb.GetGroupInfoRequest) (*pb.GetGroupInfoResponse, error) {
+	defer recoverPanic("GetGroupInfo")
+	cli, err := g.clientFor(req.GetAccountKey())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := g.groups.GetGroupInfo(ctx, cli, req.GetGroupJid())
+	if err != nil {
+		return nil, groupErrToStatus(err)
+	}
+	return resp, nil
+}
+
+func (g *gateway) PreviewGroupInvite(ctx context.Context, req *pb.PreviewGroupInviteRequest) (*pb.PreviewGroupInviteResponse, error) {
+	defer recoverPanic("PreviewGroupInvite")
+	cli, err := g.clientFor(req.GetAccountKey())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := g.groups.PreviewGroupInvite(ctx, cli, req.GetInviteLink())
+	if err != nil {
+		return nil, groupErrToStatus(err)
+	}
+	return resp, nil
+}
+
+func (g *gateway) JoinGroupViaInvite(ctx context.Context, req *pb.JoinGroupViaInviteRequest) (*pb.JoinGroupViaInviteResponse, error) {
+	defer recoverPanic("JoinGroupViaInvite")
+	cli, err := g.clientFor(req.GetAccountKey())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := g.groups.JoinGroupViaInvite(ctx, cli, req.GetInviteLink())
+	if err != nil {
+		return nil, groupErrToStatus(err)
+	}
+	return resp, nil
+}
+
+func (g *gateway) LeaveGroup(ctx context.Context, req *pb.LeaveGroupRequest) (*pb.LeaveGroupResponse, error) {
+	defer recoverPanic("LeaveGroup")
+	cli, err := g.clientFor(req.GetAccountKey())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := g.groups.LeaveGroup(ctx, cli, req.GetGroupJid())
+	if err != nil {
+		return nil, groupErrToStatus(err)
+	}
+	return resp, nil
+}
+
+func (g *gateway) CreateGroup(ctx context.Context, req *pb.CreateGroupRequest) (*pb.CreateGroupResponse, error) {
+	defer recoverPanic("CreateGroup")
+	cli, err := g.clientFor(req.GetAccountKey())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := g.groups.CreateGroup(ctx, cli, req.GetName(), req.GetParticipantJids())
+	if err != nil {
+		return nil, groupErrToStatus(err)
+	}
+	return resp, nil
+}
+
+func (g *gateway) UpdateGroupSettings(ctx context.Context, req *pb.UpdateGroupSettingsRequest) (*pb.UpdateGroupSettingsResponse, error) {
+	defer recoverPanic("UpdateGroupSettings")
+	cli, err := g.clientFor(req.GetAccountKey())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := g.groups.UpdateGroupSettings(ctx, cli, req)
+	if err != nil {
+		return nil, groupErrToStatus(err)
+	}
+	return resp, nil
+}
+
+func (g *gateway) UpdateGroupParticipants(ctx context.Context, req *pb.UpdateGroupParticipantsRequest) (*pb.UpdateGroupParticipantsResponse, error) {
+	defer recoverPanic("UpdateGroupParticipants")
+	cli, err := g.clientFor(req.GetAccountKey())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := g.groups.UpdateGroupParticipants(ctx, cli, req)
+	if err != nil {
+		return nil, groupErrToStatus(err)
+	}
+	return resp, nil
+}
+
+func (g *gateway) GetGroupInviteLink(ctx context.Context, req *pb.GetGroupInviteLinkRequest) (*pb.GetGroupInviteLinkResponse, error) {
+	defer recoverPanic("GetGroupInviteLink")
+	cli, err := g.clientFor(req.GetAccountKey())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := g.groups.GetGroupInviteLink(ctx, cli, req.GetGroupJid(), req.GetReset_())
+	if err != nil {
+		return nil, groupErrToStatus(err)
+	}
+	return resp, nil
+}
+
+// groupErrToStatus 把 internal/groups 与 whatsmeow 的错误映射到 gRPC status。
+//
+// 映射规则（与 PHASE_4_PLAN 群组错误决策保持一致）：
+//   - groups.ErrInvalidJID / ErrEmptyInviteCode / ErrEmptyGroupName /
+//     ErrNoParticipants / ErrInvalidParticipantAction
+//                                                  → INVALID_ARGUMENT
+//   - whatsmeow.ErrGroupNotFound                   → NOT_FOUND
+//   - whatsmeow.ErrNotInGroup /
+//     whatsmeow.ErrGroupInviteLinkUnauthorized     → PERMISSION_DENIED
+//   - whatsmeow.ErrInviteLinkInvalid               → INVALID_ARGUMENT
+//   - whatsmeow.ErrInviteLinkRevoked               → NOT_FOUND
+//   - 其他                                          → UNAVAILABLE（多数为
+//     网络 / 服务端临时错误；客户端可安全重试）
+func groupErrToStatus(err error) error {
+	switch {
+	case errors.Is(err, groups.ErrInvalidJID),
+		errors.Is(err, groups.ErrEmptyInviteCode),
+		errors.Is(err, groups.ErrEmptyGroupName),
+		errors.Is(err, groups.ErrNoParticipants),
+		errors.Is(err, groups.ErrInvalidParticipantAction),
+		errors.Is(err, whatsmeow.ErrInviteLinkInvalid):
+		return status.Errorf(codes.InvalidArgument, "%v", err)
+	case errors.Is(err, whatsmeow.ErrGroupNotFound),
+		errors.Is(err, whatsmeow.ErrInviteLinkRevoked):
+		return status.Errorf(codes.NotFound, "%v", err)
+	case errors.Is(err, whatsmeow.ErrNotInGroup),
+		errors.Is(err, whatsmeow.ErrGroupInviteLinkUnauthorized):
+		return status.Errorf(codes.PermissionDenied, "%v", err)
+	default:
+		return status.Errorf(codes.Unavailable, "%v", err)
+	}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

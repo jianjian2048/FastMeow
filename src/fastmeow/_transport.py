@@ -31,13 +31,25 @@ from .exceptions import (
     AccountError,
     AccountNotFoundError,
     ConfigurationError,
+    GroupError,
+    GroupPermissionError,
     InvalidJIDError,
+    InviteLinkInvalidError,
+    InviteLinkRevokedError,
     MessageSendError,
     SidecarCrashedError,
     SidecarStartupError,
     TransportError,
 )
-from .types import Account, Event, SendResult, event_from_proto
+from .types import (
+    Account,
+    Event,
+    GroupInfo,
+    GroupParticipantAction,
+    GroupParticipantUpdateResult,
+    SendResult,
+    event_from_proto,
+)
 
 # 用于 RPC 相关错误转换的 RPC 操作标记。
 # 请保持此列表与调用 _translate() 的 Transport 方法同步。
@@ -50,7 +62,31 @@ RpcOp = Literal[
     "send_message",
     "stream_events",
     "shutdown",
+    "list_joined_groups",
+    "get_group_info",
+    "preview_group_invite",
+    "join_group_via_invite",
+    "leave_group",
+    "create_group",
+    "update_group_settings",
+    "update_group_participants",
+    "get_group_invite_link",
 ]
+
+# 上述群组 RPC 的集合，用于在 _translate 中识别群组操作。
+_GROUP_OPS: frozenset[RpcOp] = frozenset(
+    {
+        "list_joined_groups",
+        "get_group_info",
+        "preview_group_invite",
+        "join_group_via_invite",
+        "leave_group",
+        "create_group",
+        "update_group_settings",
+        "update_group_participants",
+        "get_group_invite_link",
+    }
+)
 
 if TYPE_CHECKING:
     pass
@@ -96,6 +132,28 @@ def _translate(
     # 通道级故障：与具体 op 无关。
     if code == grpc.StatusCode.UNAVAILABLE:
         return SidecarCrashedError(f"sidecar unavailable: {detail}")
+
+    # 群组 RPC 的细化映射（必须在通用 NOT_FOUND/INVALID_ARGUMENT 分支之前，
+    # 否则邀请链接相关的 NOT_FOUND 会被错误地识别为 AccountNotFoundError）。
+    if op in _GROUP_OPS:
+        detail_l = detail.lower()
+        if code == grpc.StatusCode.PERMISSION_DENIED:
+            return GroupPermissionError(f"{op}: {detail}")
+        if code == grpc.StatusCode.INVALID_ARGUMENT:
+            if "invite" in detail_l:
+                return InviteLinkInvalidError(detail)
+            if "jid" in detail_l:
+                return InvalidJIDError(detail)
+            return GroupError(f"{op}: invalid argument: {detail}")
+        if code == grpc.StatusCode.NOT_FOUND:
+            if "invite" in detail_l:
+                return InviteLinkRevokedError(detail)
+            # 群组 RPC 上的 NOT_FOUND 可能是未知 account_key 或未知群组；
+            # account_key 缺失时 sidecar 会先在请求验证阶段返回 INVALID_ARGUMENT，
+            # 因此到这里通常是群组未找到。
+            return GroupError(f"{op}: not found: {detail}")
+        # 落到通用 GroupError（FAILED_PRECONDITION / INTERNAL 等）。
+        return GroupError(f"{op}: {code.name}: {detail}")
 
     # NOT_FOUND / ALREADY_EXISTS 在每个账号相关的 RPC 中都与账号有关。
     if code == grpc.StatusCode.NOT_FOUND:
@@ -274,6 +332,179 @@ class Transport:
             if exc.code() == grpc.StatusCode.CANCELLED:
                 return
             raise _translate(exc, op="stream_events") from exc
+
+    # -- 群组 RPC（Phase 4.1） --------------------------------------------
+
+    async def list_joined_groups(self, account_key: str) -> tuple[GroupInfo, ...]:
+        """列出账号已加入的所有群组。"""
+        try:
+            resp: pb.ListJoinedGroupsResponse = await self._stub.ListJoinedGroups(
+                pb.ListJoinedGroupsRequest(account_key=account_key),
+                timeout=DEFAULT_DEADLINE,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(exc, op="list_joined_groups", account_key=account_key) from exc
+        return tuple(GroupInfo.from_proto(g) for g in resp.groups)
+
+    async def get_group_info(self, *, account_key: str, group_jid: str) -> GroupInfo:
+        """获取群组的元数据快照。"""
+        try:
+            resp: pb.GetGroupInfoResponse = await self._stub.GetGroupInfo(
+                pb.GetGroupInfoRequest(account_key=account_key, group_jid=group_jid),
+                timeout=DEFAULT_DEADLINE,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(exc, op="get_group_info", account_key=account_key) from exc
+        return GroupInfo.from_proto(resp.group_info)
+
+    async def preview_group_invite(
+        self, *, account_key: str, invite_link: str
+    ) -> GroupInfo:
+        """预览邀请链接背后的群组（不加入）。"""
+        try:
+            resp: pb.PreviewGroupInviteResponse = await self._stub.PreviewGroupInvite(
+                pb.PreviewGroupInviteRequest(
+                    account_key=account_key, invite_link=invite_link
+                ),
+                timeout=DEFAULT_DEADLINE,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(exc, op="preview_group_invite", account_key=account_key) from exc
+        return GroupInfo.from_proto(resp.group_info)
+
+    async def join_group_via_invite(
+        self, *, account_key: str, invite_link: str
+    ) -> str:
+        """通过邀请链接加入群组，返回群组 JID。"""
+        try:
+            resp: pb.JoinGroupViaInviteResponse = await self._stub.JoinGroupViaInvite(
+                pb.JoinGroupViaInviteRequest(
+                    account_key=account_key, invite_link=invite_link
+                ),
+                timeout=DEFAULT_DEADLINE,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(
+                exc, op="join_group_via_invite", account_key=account_key
+            ) from exc
+        return resp.group_jid
+
+    async def leave_group(self, *, account_key: str, group_jid: str) -> None:
+        """退出群组。"""
+        try:
+            await self._stub.LeaveGroup(
+                pb.LeaveGroupRequest(account_key=account_key, group_jid=group_jid),
+                timeout=DEFAULT_DEADLINE,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(exc, op="leave_group", account_key=account_key) from exc
+
+    async def create_group(
+        self,
+        *,
+        account_key: str,
+        name: str,
+        participant_jids: tuple[str, ...] = (),
+    ) -> GroupInfo:
+        """创建新群组并初始化成员。"""
+        try:
+            resp: pb.CreateGroupResponse = await self._stub.CreateGroup(
+                pb.CreateGroupRequest(
+                    account_key=account_key,
+                    name=name,
+                    participant_jids=list(participant_jids),
+                ),
+                timeout=DEFAULT_DEADLINE,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(exc, op="create_group", account_key=account_key) from exc
+        return GroupInfo.from_proto(resp.group_info)
+
+    async def update_group_settings(
+        self,
+        *,
+        account_key: str,
+        group_jid: str,
+        name: str | None = None,
+        topic: str | None = None,
+        is_announce: bool | None = None,
+        is_locked: bool | None = None,
+    ) -> GroupInfo:
+        """部分更新群组设置（仅传入非 None 字段被应用）。
+
+        sidecar 顺序应用 4 个 setter 并返回最新快照；不是事务，
+        中途失败会让前面的更改保留。
+        """
+        req = pb.UpdateGroupSettingsRequest(
+            account_key=account_key,
+            group_jid=group_jid,
+            name=name or "",
+            has_name=name is not None,
+            topic=topic or "",
+            has_topic=topic is not None,
+            is_announce=bool(is_announce) if is_announce is not None else False,
+            has_is_announce=is_announce is not None,
+            is_locked=bool(is_locked) if is_locked is not None else False,
+            has_is_locked=is_locked is not None,
+        )
+        try:
+            resp: pb.UpdateGroupSettingsResponse = await self._stub.UpdateGroupSettings(
+                req, timeout=DEFAULT_DEADLINE
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(
+                exc, op="update_group_settings", account_key=account_key
+            ) from exc
+        return GroupInfo.from_proto(resp.group_info)
+
+    async def update_group_participants(
+        self,
+        *,
+        account_key: str,
+        group_jid: str,
+        action: GroupParticipantAction,
+        participant_jids: tuple[str, ...],
+    ) -> tuple[GroupParticipantUpdateResult, ...]:
+        """添加 / 移除 / 提升 / 降级群成员。返回逐条结果。"""
+        # proto stub 期望嵌套 enum 类型；运行时 int 值与 enum 值等价。
+        # 我们传字符串名让 protobuf 自行转换，避免类型层面的 cast。
+        action_name = f"GROUP_PARTICIPANT_ACTION_{action.value}"
+        try:
+            resp: pb.UpdateGroupParticipantsResponse = (
+                await self._stub.UpdateGroupParticipants(
+                    pb.UpdateGroupParticipantsRequest(
+                        account_key=account_key,
+                        group_jid=group_jid,
+                        action=action_name,
+                        participant_jids=list(participant_jids),
+                    ),
+                    timeout=DEFAULT_DEADLINE,
+                )
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(
+                exc, op="update_group_participants", account_key=account_key
+            ) from exc
+        return tuple(
+            GroupParticipantUpdateResult.from_proto(r) for r in resp.results
+        )
+
+    async def get_group_invite_link(
+        self, *, account_key: str, group_jid: str, reset: bool = False
+    ) -> str:
+        """获取（或重置）群组邀请链接。"""
+        try:
+            resp: pb.GetGroupInviteLinkResponse = await self._stub.GetGroupInviteLink(
+                pb.GetGroupInviteLinkRequest(
+                    account_key=account_key, group_jid=group_jid, reset=reset
+                ),
+                timeout=DEFAULT_DEADLINE,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(
+                exc, op="get_group_invite_link", account_key=account_key
+            ) from exc
+        return resp.invite_link
 
     async def shutdown(self, *, grace_ms: int = 0) -> None:
         """请求 sidecar 清理运行中的 RPC 并退出。
