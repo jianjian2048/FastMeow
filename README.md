@@ -14,20 +14,14 @@ Pythonic, async-native WhatsApp automation SDK powered by an embedded whatsmeow 
 - **Alpha**: Project is in early development.
 - **Phase 1+2**: Go sidecar and Python SDK are shipped and verified.
 - **CI Verified**: Multi-platform wheels are tested via automated pipelines (mypy strict, ruff, 117+ tests).
-- **Distribution**: Not yet on PyPI. Currently available via direct wheel installation.
+- **Distribution**: Available on [PyPI](https://pypi.org/project/fastmeow/).
 
 ## Installation
-Currently, install FastMeow from a built wheel artifact:
-```bash
-pip install ./fastmeow-0.1.0-py3-none-manylinux2014_x86_64.whl
-```
-
-Once published, you will be able to install it via PyPI:
 ```bash
 pip install fastmeow
 ```
 
-Supported platforms: Linux (x86_64), macOS (arm64 12.0+), and Windows (x86_64).
+Supported platforms: Linux (x86_64), macOS (arm64 12.0+), and Windows (x86_64). Requires Python 3.12+.
 
 ## Quickstart
 The following example implements a basic echo bot. On the first run, it will print a QR code in your terminal for pairing. Subsequent runs will reuse the session stored in the `./sessions/` directory.
@@ -174,8 +168,8 @@ Requirements: Python 3.12+.
 
 ## Roadmap
 - **Phase 3 ✅**: Release pipeline and multi-platform wheel automation.
+- **v0.1.0 ✅**: Published to PyPI.
 - **Near-term**:
-  - Official PyPI publication.
   - Expanded event types (presence, receipts).
   - Group management features.
 - **Deferred**:

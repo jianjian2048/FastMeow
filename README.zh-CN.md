@@ -14,20 +14,14 @@ Pythonic、原生异步的 WhatsApp 自动化 SDK，由内嵌的 whatsmeow Go si
 - **Alpha**：项目处于早期开发阶段。
 - **阶段 1+2**：Go sidecar 和 Python SDK 已发布并经过验证。
 - **CI 已验证**：多平台 wheel 包已通过自动化流水线测试（mypy strict、ruff、117+ 测试）。
-- **分发**：尚未发布到 PyPI。目前可通过直接安装 wheel 包使用。
+- **分发**：已发布到 [PyPI](https://pypi.org/project/fastmeow/)。
 
 ## 安装
-目前，请从构建好的 wheel 产物安装 FastMeow：
-```bash
-pip install ./fastmeow-0.1.0-py3-none-manylinux2014_x86_64.whl
-```
-
-发布后，你将可以通过 PyPI 安装：
 ```bash
 pip install fastmeow
 ```
 
-支持的平台：Linux (x86_64)、macOS (arm64 12.0+) 和 Windows (x86_64)。
+支持的平台：Linux (x86_64)、macOS (arm64 12.0+) 和 Windows (x86_64)。需要 Python 3.12+。
 
 ## 快速入门
 以下示例实现了一个基础的 echo 机器人。第一次运行时，它会在终端打印二维码用于配对。后续运行将复用存储在 `./sessions/` 目录中的会话。
@@ -174,8 +168,8 @@ FastMeow 为以下平台提供预编译的 sidecar 二进制文件：
 
 ## 路线图
 - **阶段 3 ✅**：发布流水线和多平台 wheel 包自动化。
+- **v0.1.0 ✅**：正式发布到 PyPI。
 - **近期计划**：
-  - 正式发布到 PyPI。
   - 扩展事件类型（状态、回执）。
   - 群组管理功能。
 - **远期计划**：
