@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import datetime
 from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
@@ -43,10 +44,14 @@ from .exceptions import (
 )
 from .types import (
     Account,
+    ChatPresenceMedia,
+    ChatPresenceState,
     Event,
     GroupInfo,
     GroupParticipantAction,
     GroupParticipantUpdateResult,
+    PresenceType,
+    ReceiptType,
     SendResult,
     event_from_proto,
 )
@@ -71,6 +76,10 @@ RpcOp = Literal[
     "update_group_settings",
     "update_group_participants",
     "get_group_invite_link",
+    "mark_read",
+    "send_presence",
+    "send_chat_presence",
+    "subscribe_presence",
 ]
 
 # 上述群组 RPC 的集合，用于在 _translate 中识别群组操作。
@@ -505,6 +514,101 @@ class Transport:
                 exc, op="get_group_invite_link", account_key=account_key
             ) from exc
         return resp.invite_link
+
+    # -- 回执 / 在线状态 RPC（Phase 4.2） --------------------------------
+
+    async def mark_read(
+        self,
+        *,
+        account_key: str,
+        chat_jid: str,
+        sender_jid: str,
+        message_ids: tuple[str, ...],
+        receipt_type: ReceiptType = ReceiptType.READ,
+        read_at: datetime | None = None,
+    ) -> None:
+        """发送已读 / 已播放回执（标记一批消息）。
+
+        ``receipt_type`` 默认为 ``READ``；语音消息建议传 ``PLAYED``。
+        ``read_at=None`` 时由 sidecar 使用当前时间作为时间戳。
+        """
+        req = pb.MarkReadRequest(
+            account_key=account_key,
+            chat_jid=chat_jid,
+            sender_jid=sender_jid,
+            message_ids=list(message_ids),
+            receipt_type=f"RECEIPT_TYPE_{receipt_type.value}",
+        )
+        if read_at is not None:
+            ts = Timestamp()
+            ts.FromDatetime(read_at)
+            req.read_at.CopyFrom(ts)
+        try:
+            await self._stub.MarkRead(req, timeout=DEFAULT_DEADLINE)
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(exc, op="mark_read", account_key=account_key) from exc
+
+    async def send_presence(
+        self,
+        *,
+        account_key: str,
+        presence: PresenceType,
+    ) -> None:
+        """发送账号级在线状态（``AVAILABLE`` / ``UNAVAILABLE``）。"""
+        try:
+            await self._stub.SendPresence(
+                pb.SendPresenceRequest(
+                    account_key=account_key,
+                    presence=f"PRESENCE_TYPE_{presence.value}",
+                ),
+                timeout=DEFAULT_DEADLINE,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(exc, op="send_presence", account_key=account_key) from exc
+
+    async def send_chat_presence(
+        self,
+        *,
+        account_key: str,
+        chat_jid: str,
+        state: ChatPresenceState,
+        media: ChatPresenceMedia = ChatPresenceMedia.TEXT,
+    ) -> None:
+        """发送会话级输入状态（"正在输入" / "已暂停"）。"""
+        try:
+            await self._stub.SendChatPresence(
+                pb.SendChatPresenceRequest(
+                    account_key=account_key,
+                    chat_jid=chat_jid,
+                    state=f"CHAT_PRESENCE_STATE_{state.value}",
+                    media=f"CHAT_PRESENCE_MEDIA_{media.value}",
+                ),
+                timeout=DEFAULT_DEADLINE,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(
+                exc, op="send_chat_presence", account_key=account_key
+            ) from exc
+
+    async def subscribe_presence(
+        self,
+        *,
+        account_key: str,
+        jid: str,
+    ) -> None:
+        """订阅指定联系人的在线状态推送。
+
+        whatsmeow 会在订阅后异步推送 ``PresenceEvent``；此 RPC 仅传达订阅意图。
+        """
+        try:
+            await self._stub.SubscribePresence(
+                pb.SubscribePresenceRequest(account_key=account_key, jid=jid),
+                timeout=DEFAULT_DEADLINE,
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(
+                exc, op="subscribe_presence", account_key=account_key
+            ) from exc
 
     async def shutdown(self, *, grace_ms: int = 0) -> None:
         """请求 sidecar 清理运行中的 RPC 并退出。

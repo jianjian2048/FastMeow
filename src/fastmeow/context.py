@@ -32,14 +32,19 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING, Protocol
 
 from fastmeow.exceptions import ReplyNotAvailableError
 from fastmeow.types import (
+    ChatPresenceMedia,
+    ChatPresenceState,
     Event,
     GroupInfo,
     GroupParticipantUpdateResult,
     MessageEvent,
+    PresenceType,
+    ReceiptType,
     SendResult,
 )
 
@@ -147,6 +152,54 @@ class AccountClient(Protocol):
         self, group_jid: str, *, revoke: bool = False
     ) -> str:
         """获取群组邀请链接。``revoke=True`` 时撤销旧链接并生成新链接。"""
+        ...
+
+    # -- 回执 / 在线状态（Phase 4.2） --------------------------------
+
+    async def mark_read(
+        self,
+        chat_jid: str,
+        sender_jid: str,
+        message_ids: Sequence[str],
+        *,
+        receipt_type: ReceiptType = ReceiptType.READ,
+        read_at: datetime | None = None,
+    ) -> None:
+        """对一批消息发送已读 / 已播放回执。
+
+        ``sender_jid`` 在单聊中等同于 ``chat_jid``，在群聊中是消息原作者。
+        ``read_at=None`` 时由 sidecar 使用当前时间。
+        """
+        ...
+
+    async def send_presence(self, presence: PresenceType) -> None:
+        """发送账号级在线状态（``AVAILABLE`` / ``UNAVAILABLE``）。
+
+        通常在登录后 / 应用切回前台时调用一次 ``AVAILABLE``。
+        """
+        ...
+
+    async def send_chat_presence(
+        self,
+        chat_jid: str,
+        state: ChatPresenceState,
+        *,
+        media: ChatPresenceMedia = ChatPresenceMedia.TEXT,
+    ) -> None:
+        """发送会话级输入状态（"正在输入" / "已暂停"等）。
+
+        ``state=COMPOSING`` 时通常配合 ``media=TEXT`` 或 ``AUDIO``；
+        ``state=PAUSED`` 时 ``media`` 字段被服务器忽略，但仍需提供。
+        """
+        ...
+
+    async def subscribe_presence(self, jid: str) -> None:
+        """订阅指定联系人的在线状态推送。
+
+        订阅后 sidecar 会以 :class:`PresenceEvent` 形式异步推送对方的
+        在线 / 最后一次在线时间变化。需先注册 ``@router.on_presence()`` 处理器
+        才能收到事件。
+        """
         ...
 
 

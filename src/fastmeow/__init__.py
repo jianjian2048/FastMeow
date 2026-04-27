@@ -58,6 +58,9 @@ from .router import Router, SkipHandler
 from .types import (
     Account,
     AccountState,
+    ChatPresenceEvent,
+    ChatPresenceMedia,
+    ChatPresenceState,
     ConnectedEvent,
     DisconnectedEvent,
     Event,
@@ -71,7 +74,11 @@ from .types import (
     LoggedOutEvent,
     MessageEvent,
     PairSuccessEvent,
+    PresenceEvent,
+    PresenceType,
     QREvent,
+    ReceiptEvent,
+    ReceiptType,
     SendResult,
     UnknownEvent,
 )
@@ -106,12 +113,20 @@ __all__ = [  # noqa: RUF022  -- 按领域分组，非字母序
     "JoinedGroupEvent",
     "GroupInfoEvent",
     "GroupParticipantUpdateEvent",
+    "ReceiptEvent",
+    "PresenceEvent",
+    "ChatPresenceEvent",
     "SendResult",
     # 群组
     "GroupInfo",
     "GroupParticipant",
     "GroupParticipantAction",
     "GroupParticipantUpdateResult",
+    # 回执 / 在线状态
+    "ReceiptType",
+    "PresenceType",
+    "ChatPresenceState",
+    "ChatPresenceMedia",
     # 异常 (完整层级)
     "FastMeowError",
     "ConfigurationError",

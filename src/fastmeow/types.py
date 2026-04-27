@@ -31,6 +31,9 @@ if TYPE_CHECKING:
 __all__ = [
     "Account",
     "AccountState",
+    "ChatPresenceEvent",
+    "ChatPresenceMedia",
+    "ChatPresenceState",
     "ConnectedEvent",
     "DisconnectedEvent",
     "Event",
@@ -44,7 +47,11 @@ __all__ = [
     "LoggedOutEvent",
     "MessageEvent",
     "PairSuccessEvent",
+    "PresenceEvent",
+    "PresenceType",
     "QREvent",
+    "ReceiptEvent",
+    "ReceiptType",
     "SendResult",
     "UnknownEvent",
 ]
@@ -402,6 +409,183 @@ class UnknownEvent(_EventBase):
     """底层 whatsmeow 事件的 Go 类型名称，例如 ``*events.HistorySync``。"""
 
 
+# ---------------------------------------------------------------------------
+# Receipts & Presence（Phase 4.2 软状态事件）
+#
+# 这三个事件高频且对多数业务无关，因此默认不递送：调用方需在
+# 至少一个 router 上注册 on_receipt / on_presence / on_chat_presence
+# 处理器；FastMeow 据此 introspect 并向 sidecar 设置
+# ``StreamEventsRequest.include_soft_events=True``。
+# ---------------------------------------------------------------------------
+
+
+class ReceiptType(StrEnum):
+    """消息回执类型。
+
+    值镜像 ``fastmeow.v1.ReceiptType``，使用纯字符串便于日志/序列化。
+    出站方向（:meth:`fastmeow.AccountClient.mark_read` 等）只接受
+    ``DELIVERED`` / ``READ`` / ``PLAYED`` / ``SERVER``；UNSPECIFIED
+    保留给入站事件未知值的兜底标记位。
+    """
+
+    UNSPECIFIED = "UNSPECIFIED"
+    DELIVERED = "DELIVERED"
+    READ = "READ"
+    PLAYED = "PLAYED"
+    SERVER = "SERVER"
+
+    @classmethod
+    def from_proto(cls, value: int) -> ReceiptType:
+        """将 proto 枚举整数（``RECEIPT_TYPE_*``）映射到本类。"""
+        from fastmeow._generated.fastmeow.v1 import gateway_pb2 as pb
+
+        try:
+            name = pb.ReceiptType.Name(value)
+        except ValueError:
+            return cls.UNSPECIFIED
+        suffix = name.removeprefix("RECEIPT_TYPE_")
+        try:
+            return cls(suffix)
+        except ValueError:
+            return cls.UNSPECIFIED
+
+    def to_proto(self) -> int:
+        """将本枚举映射为 proto 枚举整数。"""
+        from fastmeow._generated.fastmeow.v1 import gateway_pb2 as pb
+
+        return int(pb.ReceiptType.Value(f"RECEIPT_TYPE_{self.value}"))
+
+
+class PresenceType(StrEnum):
+    """全局在线状态。仅用于出站
+    :meth:`fastmeow.AccountClient.send_presence`；入站
+    :class:`PresenceEvent` 单独使用 ``unavailable: bool``。
+    """
+
+    UNSPECIFIED = "UNSPECIFIED"
+    AVAILABLE = "AVAILABLE"
+    UNAVAILABLE = "UNAVAILABLE"
+
+    @classmethod
+    def from_proto(cls, value: int) -> PresenceType:
+        from fastmeow._generated.fastmeow.v1 import gateway_pb2 as pb
+
+        try:
+            name = pb.PresenceType.Name(value)
+        except ValueError:
+            return cls.UNSPECIFIED
+        suffix = name.removeprefix("PRESENCE_TYPE_")
+        try:
+            return cls(suffix)
+        except ValueError:
+            return cls.UNSPECIFIED
+
+    def to_proto(self) -> int:
+        from fastmeow._generated.fastmeow.v1 import gateway_pb2 as pb
+
+        return int(pb.PresenceType.Value(f"PRESENCE_TYPE_{self.value}"))
+
+
+class ChatPresenceState(StrEnum):
+    """会话级在线状态（"正在输入" / "已暂停"）。"""
+
+    UNSPECIFIED = "UNSPECIFIED"
+    COMPOSING = "COMPOSING"
+    PAUSED = "PAUSED"
+
+    @classmethod
+    def from_proto(cls, value: int) -> ChatPresenceState:
+        from fastmeow._generated.fastmeow.v1 import gateway_pb2 as pb
+
+        try:
+            name = pb.ChatPresenceState.Name(value)
+        except ValueError:
+            return cls.UNSPECIFIED
+        suffix = name.removeprefix("CHAT_PRESENCE_STATE_")
+        try:
+            return cls(suffix)
+        except ValueError:
+            return cls.UNSPECIFIED
+
+    def to_proto(self) -> int:
+        from fastmeow._generated.fastmeow.v1 import gateway_pb2 as pb
+
+        return int(pb.ChatPresenceState.Value(f"CHAT_PRESENCE_STATE_{self.value}"))
+
+
+class ChatPresenceMedia(StrEnum):
+    """会话级在线状态附带的媒体类型（文字 / 录音）。
+
+    ``UNSPECIFIED`` 在出站方向被 sidecar 兜底为 ``TEXT`` —— 与
+    whatsmeow 「空字符串等同 text」 的约定保持一致。
+    """
+
+    UNSPECIFIED = "UNSPECIFIED"
+    TEXT = "TEXT"
+    AUDIO = "AUDIO"
+
+    @classmethod
+    def from_proto(cls, value: int) -> ChatPresenceMedia:
+        from fastmeow._generated.fastmeow.v1 import gateway_pb2 as pb
+
+        try:
+            name = pb.ChatPresenceMedia.Name(value)
+        except ValueError:
+            return cls.UNSPECIFIED
+        suffix = name.removeprefix("CHAT_PRESENCE_MEDIA_")
+        try:
+            return cls(suffix)
+        except ValueError:
+            return cls.UNSPECIFIED
+
+    def to_proto(self) -> int:
+        from fastmeow._generated.fastmeow.v1 import gateway_pb2 as pb
+
+        return int(pb.ChatPresenceMedia.Value(f"CHAT_PRESENCE_MEDIA_{self.value}"))
+
+
+@dataclass(frozen=True, slots=True)
+class ReceiptEvent(_EventBase):
+    """收到一条或多条消息的送达 / 已读 / 已播放回执。
+
+    回执是「软」事件：默认不递送。仅当至少一个 router 注册了
+    ``on_receipt`` 处理器时，FastMeow 才会请求 sidecar 转发。
+    """
+
+    chat_jid: str
+    sender_jid: str
+    """触发回执的 WhatsApp 用户 JID（已读消息的人）。"""
+    message_ids: tuple[str, ...]
+    """一次回执可同时覆盖多条消息（whatsmeow 行为）。"""
+    receipt_type: ReceiptType
+    timestamp: datetime | None = None
+    """WhatsApp 服务器时间戳（UTC，包含时区信息）。可能为 None。"""
+
+
+@dataclass(frozen=True, slots=True)
+class PresenceEvent(_EventBase):
+    """联系人的全局在线状态发生变化。
+
+    ``unavailable`` 为 True 表示对方现已离线；False 表示在线。
+    ``last_seen`` 仅在对方允许公开「最后在线时间」时被填充。
+    """
+
+    from_jid: str
+    """状态变化的联系人 JID。"""
+    unavailable: bool
+    last_seen: datetime | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ChatPresenceEvent(_EventBase):
+    """对方在某一具体会话中正在输入 / 暂停 / 录音。"""
+
+    chat_jid: str
+    sender_jid: str
+    state: ChatPresenceState
+    media: ChatPresenceMedia
+
+
 # ``Event`` 是所有公开事件的联合类型。处理器可以声明
 # ``event: Event`` 来接受任何事件，或使用具体的子类型。
 Event = (
@@ -414,6 +598,9 @@ Event = (
     | JoinedGroupEvent
     | GroupInfoEvent
     | GroupParticipantUpdateEvent
+    | ReceiptEvent
+    | PresenceEvent
+    | ChatPresenceEvent
     | UnknownEvent
 )
 
@@ -536,6 +723,39 @@ def event_from_proto(msg: _pb.StreamEventsResponse) -> Event | None:
             action=GroupParticipantAction.from_proto(gp.action),
             participant_jids=tuple(gp.participant_jids),
             actor_jid=gp.actor_jid,
+        )
+    if which == "receipt":
+        r = msg.receipt
+        rts: datetime | None = None
+        if r.HasField("timestamp"):
+            rts = r.timestamp.ToDatetime(tzinfo=UTC)
+        return ReceiptEvent(
+            **base,
+            chat_jid=r.chat_jid,
+            sender_jid=r.sender_jid,
+            message_ids=tuple(r.message_ids),
+            receipt_type=ReceiptType.from_proto(r.receipt_type),
+            timestamp=rts,
+        )
+    if which == "presence":
+        pr = msg.presence
+        ls: datetime | None = None
+        if pr.HasField("last_seen"):
+            ls = pr.last_seen.ToDatetime(tzinfo=UTC)
+        return PresenceEvent(
+            **base,
+            from_jid=pr.from_jid,
+            unavailable=pr.unavailable,
+            last_seen=ls,
+        )
+    if which == "chat_presence":
+        cp = msg.chat_presence
+        return ChatPresenceEvent(
+            **base,
+            chat_jid=cp.chat_jid,
+            sender_jid=cp.sender_jid,
+            state=ChatPresenceState.from_proto(cp.state),
+            media=ChatPresenceMedia.from_proto(cp.media),
         )
     return None
 

@@ -119,6 +119,26 @@ service GatewayService {
   // reset=true 时会失效旧链接并生成新链接。需要管理员权限。
   rpc GetGroupInviteLink(GetGroupInviteLinkRequest) returns (GetGroupInviteLinkResponse);
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // Receipts & Presence (Phase 4.2)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  // 将一组消息标记为已读 / 已播放。对应 whatsmeow Client.MarkRead。
+  // sender_jid 在 DM 中等于 chat_jid，在群聊中是真正发送者的 JID。
+  rpc MarkRead(MarkReadRequest) returns (MarkReadResponse);
+
+  // 推送账号自身的全局在线状态（available / unavailable）。
+  // 对应 whatsmeow Client.SendPresence。
+  rpc SendPresence(SendPresenceRequest) returns (SendPresenceResponse);
+
+  // 在指定会话内推送 typing / paused 等输入状态。
+  // 对应 whatsmeow Client.SendChatPresence。
+  rpc SendChatPresence(SendChatPresenceRequest) returns (SendChatPresenceResponse);
+
+  // 订阅指定 JID 的在线状态推送（对方上线 / 下线 / 最近一次活跃时间）。
+  // 对应 whatsmeow Client.SubscribePresence。
+  rpc SubscribePresence(SubscribePresenceRequest) returns (SubscribePresenceResponse);
+
   // 请求优雅停机。sidecar 将：
   //   1. 停止接受新的 RPC。
   //   2. 干净地断开所有客户端连接。
@@ -298,11 +318,16 @@ message StreamEventsResponse {
     JoinedGroupEvent joined_group = 16;
     GroupInfoEvent group_info = 17;
     GroupParticipantUpdateEvent group_participant_update = 18;
+    // Phase 4.2 软状态事件。仅在 StreamEventsRequest.include_soft_events=true
+    // 时才会被 sidecar 翻译并下发；否则在 events.bus 处直接丢弃，零开销。
+    ReceiptEvent receipt = 19;
+    PresenceEvent presence = 20;
+    ChatPresenceEvent chat_presence = 21;
     UnknownEvent unknown = 99;
   }
 
   // 为未来的事件变体保留。
-  reserved 19 to 98;
+  reserved 22 to 98;
 }
 
 message ConnectedEvent {}
@@ -594,4 +619,118 @@ message GetGroupInviteLinkRequest {
 message GetGroupInviteLinkResponse {
   // 完整链接 "https://chat.whatsapp.com/<code>"。
   string invite_link = 1;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Receipts & Presence (Phase 4.2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// 回执类型。语义对齐 whatsmeow types.ReceiptType（自由格式字符串），
+// 但在 wire 上收敛成枚举以避免上游变更静默破坏 Python 侧 F filter。
+// 未知 / 未来类型由 sidecar 映射为 SERVER 兜底，user code 可继续按
+// receipt_type == READ / DELIVERED / PLAYED 编写过滤器。
+enum ReceiptType {
+  RECEIPT_TYPE_UNSPECIFIED = 0;
+  // whatsmeow 中空字符串语义（""）— 服务端 ack；最常见。
+  RECEIPT_TYPE_DELIVERED = 1;
+  // "read"
+  RECEIPT_TYPE_READ = 2;
+  // "played"（语音 / 视频已播放）
+  RECEIPT_TYPE_PLAYED = 3;
+  // "server-error" / "inactive" / "retry" 等其它兜底。
+  RECEIPT_TYPE_SERVER = 4;
+}
+
+// 全局在线状态。对应 whatsmeow types.Presence ("available" / "unavailable")。
+enum PresenceType {
+  PRESENCE_TYPE_UNSPECIFIED = 0;
+  PRESENCE_TYPE_AVAILABLE = 1;
+  PRESENCE_TYPE_UNAVAILABLE = 2;
+}
+
+// 会话级输入状态。对应 whatsmeow types.ChatPresence
+// ("composing" / "paused")。
+enum ChatPresenceState {
+  CHAT_PRESENCE_STATE_UNSPECIFIED = 0;
+  // 正在输入 / 录音；whatsmeow 称 "composing"，
+  // 我们沿用上游字符串作为 enum value（Python StrEnum 使用）。
+  CHAT_PRESENCE_STATE_COMPOSING = 1;
+  CHAT_PRESENCE_STATE_PAUSED = 2;
+}
+
+// 会话级输入状态的媒体维度。对应 whatsmeow types.ChatPresenceMedia
+// ("" / "audio")。
+enum ChatPresenceMedia {
+  CHAT_PRESENCE_MEDIA_UNSPECIFIED = 0;
+  CHAT_PRESENCE_MEDIA_TEXT = 1;
+  CHAT_PRESENCE_MEDIA_AUDIO = 2;
+}
+
+message MarkReadRequest {
+  string account_key = 1;
+  // 至少一个；whatsmeow MarkRead 是批量 API。
+  repeated string message_ids = 2;
+  // 必填；DM 中即对方 JID，群聊中即群 JID。
+  string chat_jid = 3;
+  // 必填；DM 中等于 chat_jid，群聊中是真正发送者 JID。
+  string sender_jid = 4;
+  // 可选；空则 sidecar 取 time.Now()。
+  google.protobuf.Timestamp read_at = 5;
+  // 默认 READ；UNSPECIFIED 等同 READ。
+  ReceiptType receipt_type = 6;
+}
+message MarkReadResponse {}
+
+message SendPresenceRequest {
+  string account_key = 1;
+  PresenceType presence = 2;
+}
+message SendPresenceResponse {}
+
+message SendChatPresenceRequest {
+  string account_key = 1;
+  string chat_jid = 2;
+  ChatPresenceState state = 3;
+  ChatPresenceMedia media = 4;
+}
+message SendChatPresenceResponse {}
+
+message SubscribePresenceRequest {
+  string account_key = 1;
+  string jid = 2;
+}
+message SubscribePresenceResponse {}
+
+// 入站回执。whatsmeow events.Receipt 一次可能携带多个 message_ids
+// （服务端批量回执），我们按原样保留 repeated 语义，避免 N 倍事件爆炸。
+// user code 用 F filter `F.has_message_id(...)` 或直接检查
+// `sent_id in event.message_ids` 进行关联。
+message ReceiptEvent {
+  repeated string message_ids = 1;
+  // 会话 JID（DM 即对方，群聊即群）。
+  string chat_jid = 2;
+  // 真正发送回执的对端 JID。DM 中等于 chat_jid。
+  string sender_jid = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  ReceiptType receipt_type = 5;
+}
+
+// 入站全局在线状态变更。订阅后才会收到。
+message PresenceEvent {
+  string from_jid = 1;
+  // true 表示对端已下线；false 表示在线。
+  bool unavailable = 2;
+  // 上游有时携带 "最后一次活跃时间"；不存在时为 0。
+  google.protobuf.Timestamp last_seen = 3;
+}
+
+// 入站会话级输入状态变更。即使没有显式 Subscribe，
+// 在共享会话内也会被动接收。
+message ChatPresenceEvent {
+  // whatsmeow events.ChatPresence.MessageSource.Chat
+  string chat_jid = 1;
+  // whatsmeow events.ChatPresence.MessageSource.Sender
+  string sender_jid = 2;
+  ChatPresenceState state = 3;
+  ChatPresenceMedia media = 4;
 }

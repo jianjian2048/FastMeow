@@ -25,15 +25,20 @@ import contextlib
 import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 from .context import AccountClient, Ctx
 from .exceptions import BackpressureError
 from .router import Router
 from .types import (
+    ChatPresenceMedia,
+    ChatPresenceState,
     Event,
     GroupInfo,
     GroupParticipantAction,
     GroupParticipantUpdateResult,
+    PresenceType,
+    ReceiptType,
     SendResult,
 )
 
@@ -195,6 +200,52 @@ class _BoundClient:
             reset=revoke,
         )
 
+    # -- 回执 / 在线状态（Phase 4.2） --------------------------------
+
+    async def mark_read(
+        self,
+        chat_jid: str,
+        sender_jid: str,
+        message_ids: Sequence[str],
+        *,
+        receipt_type: ReceiptType = ReceiptType.READ,
+        read_at: datetime | None = None,
+    ) -> None:
+        await self._transport.mark_read(
+            account_key=self.account_key,
+            chat_jid=chat_jid,
+            sender_jid=sender_jid,
+            message_ids=tuple(message_ids),
+            receipt_type=receipt_type,
+            read_at=read_at,
+        )
+
+    async def send_presence(self, presence: PresenceType) -> None:
+        await self._transport.send_presence(
+            account_key=self.account_key,
+            presence=presence,
+        )
+
+    async def send_chat_presence(
+        self,
+        chat_jid: str,
+        state: ChatPresenceState,
+        *,
+        media: ChatPresenceMedia = ChatPresenceMedia.TEXT,
+    ) -> None:
+        await self._transport.send_chat_presence(
+            account_key=self.account_key,
+            chat_jid=chat_jid,
+            state=state,
+            media=media,
+        )
+
+    async def subscribe_presence(self, jid: str) -> None:
+        await self._transport.subscribe_presence(
+            account_key=self.account_key,
+            jid=jid,
+        )
+
 
 # 静态检查：_BoundClient 确实满足 AccountClient 接口要求。
 _: AccountClient = _BoundClient(_transport=None, account_key="", jid="")  # type: ignore[arg-type]
@@ -318,8 +369,13 @@ class Dispatcher:
 
     async def _read_loop(self) -> None:
         """``Transport.stream_events`` 的单一消费者。"""
+        # 仅当用户注册了 receipt / presence / chat_presence 处理器时，
+        # 才向 sidecar 请求软事件（避免无谓的网络与 CPU 开销）。
+        include_soft = self._router.has_soft_event_handlers()
         try:
-            async for event in self._transport.stream_events():
+            async for event in self._transport.stream_events(
+                include_soft_events=include_soft,
+            ):
                 await self._enqueue(event)
         except asyncio.CancelledError:
             raise

@@ -59,6 +59,10 @@ const (
 	GatewayService_UpdateGroupSettings_FullMethodName     = "/fastmeow.v1.GatewayService/UpdateGroupSettings"
 	GatewayService_UpdateGroupParticipants_FullMethodName = "/fastmeow.v1.GatewayService/UpdateGroupParticipants"
 	GatewayService_GetGroupInviteLink_FullMethodName      = "/fastmeow.v1.GatewayService/GetGroupInviteLink"
+	GatewayService_MarkRead_FullMethodName                = "/fastmeow.v1.GatewayService/MarkRead"
+	GatewayService_SendPresence_FullMethodName            = "/fastmeow.v1.GatewayService/SendPresence"
+	GatewayService_SendChatPresence_FullMethodName        = "/fastmeow.v1.GatewayService/SendChatPresence"
+	GatewayService_SubscribePresence_FullMethodName       = "/fastmeow.v1.GatewayService/SubscribePresence"
 	GatewayService_Shutdown_FullMethodName                = "/fastmeow.v1.GatewayService/Shutdown"
 )
 
@@ -119,6 +123,18 @@ type GatewayServiceClient interface {
 	// 取回当前群的邀请链接（whatsmeow GetGroupInviteLink）。
 	// reset=true 时会失效旧链接并生成新链接。需要管理员权限。
 	GetGroupInviteLink(ctx context.Context, in *GetGroupInviteLinkRequest, opts ...grpc.CallOption) (*GetGroupInviteLinkResponse, error)
+	// 将一组消息标记为已读 / 已播放。对应 whatsmeow Client.MarkRead。
+	// sender_jid 在 DM 中等于 chat_jid，在群聊中是真正发送者的 JID。
+	MarkRead(ctx context.Context, in *MarkReadRequest, opts ...grpc.CallOption) (*MarkReadResponse, error)
+	// 推送账号自身的全局在线状态（available / unavailable）。
+	// 对应 whatsmeow Client.SendPresence。
+	SendPresence(ctx context.Context, in *SendPresenceRequest, opts ...grpc.CallOption) (*SendPresenceResponse, error)
+	// 在指定会话内推送 typing / paused 等输入状态。
+	// 对应 whatsmeow Client.SendChatPresence。
+	SendChatPresence(ctx context.Context, in *SendChatPresenceRequest, opts ...grpc.CallOption) (*SendChatPresenceResponse, error)
+	// 订阅指定 JID 的在线状态推送（对方上线 / 下线 / 最近一次活跃时间）。
+	// 对应 whatsmeow Client.SubscribePresence。
+	SubscribePresence(ctx context.Context, in *SubscribePresenceRequest, opts ...grpc.CallOption) (*SubscribePresenceResponse, error)
 	// 请求优雅停机。sidecar 将：
 	//  1. 停止接受新的 RPC。
 	//  2. 干净地断开所有客户端连接。
@@ -304,6 +320,46 @@ func (c *gatewayServiceClient) GetGroupInviteLink(ctx context.Context, in *GetGr
 	return out, nil
 }
 
+func (c *gatewayServiceClient) MarkRead(ctx context.Context, in *MarkReadRequest, opts ...grpc.CallOption) (*MarkReadResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MarkReadResponse)
+	err := c.cc.Invoke(ctx, GatewayService_MarkRead_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gatewayServiceClient) SendPresence(ctx context.Context, in *SendPresenceRequest, opts ...grpc.CallOption) (*SendPresenceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SendPresenceResponse)
+	err := c.cc.Invoke(ctx, GatewayService_SendPresence_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gatewayServiceClient) SendChatPresence(ctx context.Context, in *SendChatPresenceRequest, opts ...grpc.CallOption) (*SendChatPresenceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SendChatPresenceResponse)
+	err := c.cc.Invoke(ctx, GatewayService_SendChatPresence_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gatewayServiceClient) SubscribePresence(ctx context.Context, in *SubscribePresenceRequest, opts ...grpc.CallOption) (*SubscribePresenceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SubscribePresenceResponse)
+	err := c.cc.Invoke(ctx, GatewayService_SubscribePresence_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *gatewayServiceClient) Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ShutdownResponse)
@@ -371,6 +427,18 @@ type GatewayServiceServer interface {
 	// 取回当前群的邀请链接（whatsmeow GetGroupInviteLink）。
 	// reset=true 时会失效旧链接并生成新链接。需要管理员权限。
 	GetGroupInviteLink(context.Context, *GetGroupInviteLinkRequest) (*GetGroupInviteLinkResponse, error)
+	// 将一组消息标记为已读 / 已播放。对应 whatsmeow Client.MarkRead。
+	// sender_jid 在 DM 中等于 chat_jid，在群聊中是真正发送者的 JID。
+	MarkRead(context.Context, *MarkReadRequest) (*MarkReadResponse, error)
+	// 推送账号自身的全局在线状态（available / unavailable）。
+	// 对应 whatsmeow Client.SendPresence。
+	SendPresence(context.Context, *SendPresenceRequest) (*SendPresenceResponse, error)
+	// 在指定会话内推送 typing / paused 等输入状态。
+	// 对应 whatsmeow Client.SendChatPresence。
+	SendChatPresence(context.Context, *SendChatPresenceRequest) (*SendChatPresenceResponse, error)
+	// 订阅指定 JID 的在线状态推送（对方上线 / 下线 / 最近一次活跃时间）。
+	// 对应 whatsmeow Client.SubscribePresence。
+	SubscribePresence(context.Context, *SubscribePresenceRequest) (*SubscribePresenceResponse, error)
 	// 请求优雅停机。sidecar 将：
 	//  1. 停止接受新的 RPC。
 	//  2. 干净地断开所有客户端连接。
@@ -433,6 +501,18 @@ func (UnimplementedGatewayServiceServer) UpdateGroupParticipants(context.Context
 }
 func (UnimplementedGatewayServiceServer) GetGroupInviteLink(context.Context, *GetGroupInviteLinkRequest) (*GetGroupInviteLinkResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetGroupInviteLink not implemented")
+}
+func (UnimplementedGatewayServiceServer) MarkRead(context.Context, *MarkReadRequest) (*MarkReadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method MarkRead not implemented")
+}
+func (UnimplementedGatewayServiceServer) SendPresence(context.Context, *SendPresenceRequest) (*SendPresenceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendPresence not implemented")
+}
+func (UnimplementedGatewayServiceServer) SendChatPresence(context.Context, *SendChatPresenceRequest) (*SendChatPresenceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendChatPresence not implemented")
+}
+func (UnimplementedGatewayServiceServer) SubscribePresence(context.Context, *SubscribePresenceRequest) (*SubscribePresenceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SubscribePresence not implemented")
 }
 func (UnimplementedGatewayServiceServer) Shutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Shutdown not implemented")
@@ -738,6 +818,78 @@ func _GatewayService_GetGroupInviteLink_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GatewayService_MarkRead_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MarkReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatewayServiceServer).MarkRead(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatewayService_MarkRead_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatewayServiceServer).MarkRead(ctx, req.(*MarkReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GatewayService_SendPresence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendPresenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatewayServiceServer).SendPresence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatewayService_SendPresence_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatewayServiceServer).SendPresence(ctx, req.(*SendPresenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GatewayService_SendChatPresence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendChatPresenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatewayServiceServer).SendChatPresence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatewayService_SendChatPresence_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatewayServiceServer).SendChatPresence(ctx, req.(*SendChatPresenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GatewayService_SubscribePresence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubscribePresenceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatewayServiceServer).SubscribePresence(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatewayService_SubscribePresence_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatewayServiceServer).SubscribePresence(ctx, req.(*SubscribePresenceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _GatewayService_Shutdown_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ShutdownRequest)
 	if err := dec(in); err != nil {
@@ -822,6 +974,22 @@ var GatewayService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetGroupInviteLink",
 			Handler:    _GatewayService_GetGroupInviteLink_Handler,
+		},
+		{
+			MethodName: "MarkRead",
+			Handler:    _GatewayService_MarkRead_Handler,
+		},
+		{
+			MethodName: "SendPresence",
+			Handler:    _GatewayService_SendPresence_Handler,
+		},
+		{
+			MethodName: "SendChatPresence",
+			Handler:    _GatewayService_SendChatPresence_Handler,
+		},
+		{
+			MethodName: "SubscribePresence",
+			Handler:    _GatewayService_SubscribePresence_Handler,
 		},
 		{
 			MethodName: "Shutdown",

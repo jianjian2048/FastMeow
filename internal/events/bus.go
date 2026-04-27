@@ -56,6 +56,8 @@ import (
 
 	pb "github.com/jianjian2048/fastmeow/gen/go/fastmeow/v1"
 	"github.com/jianjian2048/fastmeow/internal/groups"
+	"github.com/jianjian2048/fastmeow/internal/presence"
+	"github.com/jianjian2048/fastmeow/internal/receipts"
 )
 
 // DefaultBufferSize 是事件总线通道的深度。大小设定为能够承载
@@ -287,6 +289,38 @@ func (b *Bus) translate(accountKey string, evt any) []*pb.StreamEventsResponse {
 
 	case *events.GroupInfo:
 		return translateGroupInfoEvent(accountKey, e)
+
+	// Phase 4.2 软状态事件：Receipt / Presence / ChatPresence。
+	//
+	// Bus 层始终翻译为 wire 事件 —— 是否真正递送到订阅者由
+	// StreamEvents server handler 根据 StreamEventsRequest.include_soft_events
+	// 字段过滤。此设计让 Bus 保持纯粹：不感知订阅者的能力声明，
+	// 也避免「订阅时机决定哪些事件会丢」的隐晦行为。
+	//
+	// 三类事件都映射为单条 wire 事件（不像 GroupInfo 会拆 N 条）：
+	//   - Receipt: 批量 message_ids 一次性透传；
+	//   - Presence: 单 from + last_seen；
+	//   - ChatPresence: 单 chat + state + media。
+	case *events.Receipt:
+		base := mk()
+		base.Event = &pb.StreamEventsResponse_Receipt{
+			Receipt: receipts.ReceiptEventToProto(e),
+		}
+		return []*pb.StreamEventsResponse{base}
+
+	case *events.Presence:
+		base := mk()
+		base.Event = &pb.StreamEventsResponse_Presence{
+			Presence: presence.PresenceEventToProto(e),
+		}
+		return []*pb.StreamEventsResponse{base}
+
+	case *events.ChatPresence:
+		base := mk()
+		base.Event = &pb.StreamEventsResponse_ChatPresence{
+			ChatPresence: presence.ChatPresenceEventToProto(e),
+		}
+		return []*pb.StreamEventsResponse{base}
 
 	// 第一阶段：显式丢弃这些嘈杂的软状态事件。它们在配对后会爆发式触发
 	// （历史同步可能会发出数十个），而在 v1 版本中 Python 业务代码并不关心它们。

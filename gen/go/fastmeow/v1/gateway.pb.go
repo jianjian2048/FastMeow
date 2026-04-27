@@ -46,6 +46,223 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// 回执类型。语义对齐 whatsmeow types.ReceiptType（自由格式字符串），
+// 但在 wire 上收敛成枚举以避免上游变更静默破坏 Python 侧 F filter。
+// 未知 / 未来类型由 sidecar 映射为 SERVER 兜底，user code 可继续按
+// receipt_type == READ / DELIVERED / PLAYED 编写过滤器。
+type ReceiptType int32
+
+const (
+	ReceiptType_RECEIPT_TYPE_UNSPECIFIED ReceiptType = 0
+	// whatsmeow 中空字符串语义（""）— 服务端 ack；最常见。
+	ReceiptType_RECEIPT_TYPE_DELIVERED ReceiptType = 1
+	// "read"
+	ReceiptType_RECEIPT_TYPE_READ ReceiptType = 2
+	// "played"（语音 / 视频已播放）
+	ReceiptType_RECEIPT_TYPE_PLAYED ReceiptType = 3
+	// "server-error" / "inactive" / "retry" 等其它兜底。
+	ReceiptType_RECEIPT_TYPE_SERVER ReceiptType = 4
+)
+
+// Enum value maps for ReceiptType.
+var (
+	ReceiptType_name = map[int32]string{
+		0: "RECEIPT_TYPE_UNSPECIFIED",
+		1: "RECEIPT_TYPE_DELIVERED",
+		2: "RECEIPT_TYPE_READ",
+		3: "RECEIPT_TYPE_PLAYED",
+		4: "RECEIPT_TYPE_SERVER",
+	}
+	ReceiptType_value = map[string]int32{
+		"RECEIPT_TYPE_UNSPECIFIED": 0,
+		"RECEIPT_TYPE_DELIVERED":   1,
+		"RECEIPT_TYPE_READ":        2,
+		"RECEIPT_TYPE_PLAYED":      3,
+		"RECEIPT_TYPE_SERVER":      4,
+	}
+)
+
+func (x ReceiptType) Enum() *ReceiptType {
+	p := new(ReceiptType)
+	*p = x
+	return p
+}
+
+func (x ReceiptType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ReceiptType) Descriptor() protoreflect.EnumDescriptor {
+	return file_fastmeow_v1_gateway_proto_enumTypes[0].Descriptor()
+}
+
+func (ReceiptType) Type() protoreflect.EnumType {
+	return &file_fastmeow_v1_gateway_proto_enumTypes[0]
+}
+
+func (x ReceiptType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ReceiptType.Descriptor instead.
+func (ReceiptType) EnumDescriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{0}
+}
+
+// 全局在线状态。对应 whatsmeow types.Presence ("available" / "unavailable")。
+type PresenceType int32
+
+const (
+	PresenceType_PRESENCE_TYPE_UNSPECIFIED PresenceType = 0
+	PresenceType_PRESENCE_TYPE_AVAILABLE   PresenceType = 1
+	PresenceType_PRESENCE_TYPE_UNAVAILABLE PresenceType = 2
+)
+
+// Enum value maps for PresenceType.
+var (
+	PresenceType_name = map[int32]string{
+		0: "PRESENCE_TYPE_UNSPECIFIED",
+		1: "PRESENCE_TYPE_AVAILABLE",
+		2: "PRESENCE_TYPE_UNAVAILABLE",
+	}
+	PresenceType_value = map[string]int32{
+		"PRESENCE_TYPE_UNSPECIFIED": 0,
+		"PRESENCE_TYPE_AVAILABLE":   1,
+		"PRESENCE_TYPE_UNAVAILABLE": 2,
+	}
+)
+
+func (x PresenceType) Enum() *PresenceType {
+	p := new(PresenceType)
+	*p = x
+	return p
+}
+
+func (x PresenceType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (PresenceType) Descriptor() protoreflect.EnumDescriptor {
+	return file_fastmeow_v1_gateway_proto_enumTypes[1].Descriptor()
+}
+
+func (PresenceType) Type() protoreflect.EnumType {
+	return &file_fastmeow_v1_gateway_proto_enumTypes[1]
+}
+
+func (x PresenceType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use PresenceType.Descriptor instead.
+func (PresenceType) EnumDescriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{1}
+}
+
+// 会话级输入状态。对应 whatsmeow types.ChatPresence
+// ("composing" / "paused")。
+type ChatPresenceState int32
+
+const (
+	ChatPresenceState_CHAT_PRESENCE_STATE_UNSPECIFIED ChatPresenceState = 0
+	// 正在输入 / 录音；whatsmeow 称 "composing"，
+	// 我们沿用上游字符串作为 enum value（Python StrEnum 使用）。
+	ChatPresenceState_CHAT_PRESENCE_STATE_COMPOSING ChatPresenceState = 1
+	ChatPresenceState_CHAT_PRESENCE_STATE_PAUSED    ChatPresenceState = 2
+)
+
+// Enum value maps for ChatPresenceState.
+var (
+	ChatPresenceState_name = map[int32]string{
+		0: "CHAT_PRESENCE_STATE_UNSPECIFIED",
+		1: "CHAT_PRESENCE_STATE_COMPOSING",
+		2: "CHAT_PRESENCE_STATE_PAUSED",
+	}
+	ChatPresenceState_value = map[string]int32{
+		"CHAT_PRESENCE_STATE_UNSPECIFIED": 0,
+		"CHAT_PRESENCE_STATE_COMPOSING":   1,
+		"CHAT_PRESENCE_STATE_PAUSED":      2,
+	}
+)
+
+func (x ChatPresenceState) Enum() *ChatPresenceState {
+	p := new(ChatPresenceState)
+	*p = x
+	return p
+}
+
+func (x ChatPresenceState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ChatPresenceState) Descriptor() protoreflect.EnumDescriptor {
+	return file_fastmeow_v1_gateway_proto_enumTypes[2].Descriptor()
+}
+
+func (ChatPresenceState) Type() protoreflect.EnumType {
+	return &file_fastmeow_v1_gateway_proto_enumTypes[2]
+}
+
+func (x ChatPresenceState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ChatPresenceState.Descriptor instead.
+func (ChatPresenceState) EnumDescriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{2}
+}
+
+// 会话级输入状态的媒体维度。对应 whatsmeow types.ChatPresenceMedia
+// ("" / "audio")。
+type ChatPresenceMedia int32
+
+const (
+	ChatPresenceMedia_CHAT_PRESENCE_MEDIA_UNSPECIFIED ChatPresenceMedia = 0
+	ChatPresenceMedia_CHAT_PRESENCE_MEDIA_TEXT        ChatPresenceMedia = 1
+	ChatPresenceMedia_CHAT_PRESENCE_MEDIA_AUDIO       ChatPresenceMedia = 2
+)
+
+// Enum value maps for ChatPresenceMedia.
+var (
+	ChatPresenceMedia_name = map[int32]string{
+		0: "CHAT_PRESENCE_MEDIA_UNSPECIFIED",
+		1: "CHAT_PRESENCE_MEDIA_TEXT",
+		2: "CHAT_PRESENCE_MEDIA_AUDIO",
+	}
+	ChatPresenceMedia_value = map[string]int32{
+		"CHAT_PRESENCE_MEDIA_UNSPECIFIED": 0,
+		"CHAT_PRESENCE_MEDIA_TEXT":        1,
+		"CHAT_PRESENCE_MEDIA_AUDIO":       2,
+	}
+)
+
+func (x ChatPresenceMedia) Enum() *ChatPresenceMedia {
+	p := new(ChatPresenceMedia)
+	*p = x
+	return p
+}
+
+func (x ChatPresenceMedia) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ChatPresenceMedia) Descriptor() protoreflect.EnumDescriptor {
+	return file_fastmeow_v1_gateway_proto_enumTypes[3].Descriptor()
+}
+
+func (ChatPresenceMedia) Type() protoreflect.EnumType {
+	return &file_fastmeow_v1_gateway_proto_enumTypes[3]
+}
+
+func (x ChatPresenceMedia) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ChatPresenceMedia.Descriptor instead.
+func (ChatPresenceMedia) EnumDescriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{3}
+}
+
 type AccountState_State int32
 
 const (
@@ -94,11 +311,11 @@ func (x AccountState_State) String() string {
 }
 
 func (AccountState_State) Descriptor() protoreflect.EnumDescriptor {
-	return file_fastmeow_v1_gateway_proto_enumTypes[0].Descriptor()
+	return file_fastmeow_v1_gateway_proto_enumTypes[4].Descriptor()
 }
 
 func (AccountState_State) Type() protoreflect.EnumType {
-	return &file_fastmeow_v1_gateway_proto_enumTypes[0]
+	return &file_fastmeow_v1_gateway_proto_enumTypes[4]
 }
 
 func (x AccountState_State) Number() protoreflect.EnumNumber {
@@ -149,11 +366,11 @@ func (x GroupParticipantUpdateEvent_GroupParticipantAction) String() string {
 }
 
 func (GroupParticipantUpdateEvent_GroupParticipantAction) Descriptor() protoreflect.EnumDescriptor {
-	return file_fastmeow_v1_gateway_proto_enumTypes[1].Descriptor()
+	return file_fastmeow_v1_gateway_proto_enumTypes[5].Descriptor()
 }
 
 func (GroupParticipantUpdateEvent_GroupParticipantAction) Type() protoreflect.EnumType {
-	return &file_fastmeow_v1_gateway_proto_enumTypes[1]
+	return &file_fastmeow_v1_gateway_proto_enumTypes[5]
 }
 
 func (x GroupParticipantUpdateEvent_GroupParticipantAction) Number() protoreflect.EnumNumber {
@@ -1005,6 +1222,9 @@ type StreamEventsResponse struct {
 	//	*StreamEventsResponse_JoinedGroup
 	//	*StreamEventsResponse_GroupInfo
 	//	*StreamEventsResponse_GroupParticipantUpdate
+	//	*StreamEventsResponse_Receipt
+	//	*StreamEventsResponse_Presence
+	//	*StreamEventsResponse_ChatPresence
 	//	*StreamEventsResponse_Unknown
 	Event         isStreamEventsResponse_Event `protobuf_oneof:"event"`
 	unknownFields protoimpl.UnknownFields
@@ -1164,6 +1384,33 @@ func (x *StreamEventsResponse) GetGroupParticipantUpdate() *GroupParticipantUpda
 	return nil
 }
 
+func (x *StreamEventsResponse) GetReceipt() *ReceiptEvent {
+	if x != nil {
+		if x, ok := x.Event.(*StreamEventsResponse_Receipt); ok {
+			return x.Receipt
+		}
+	}
+	return nil
+}
+
+func (x *StreamEventsResponse) GetPresence() *PresenceEvent {
+	if x != nil {
+		if x, ok := x.Event.(*StreamEventsResponse_Presence); ok {
+			return x.Presence
+		}
+	}
+	return nil
+}
+
+func (x *StreamEventsResponse) GetChatPresence() *ChatPresenceEvent {
+	if x != nil {
+		if x, ok := x.Event.(*StreamEventsResponse_ChatPresence); ok {
+			return x.ChatPresence
+		}
+	}
+	return nil
+}
+
 func (x *StreamEventsResponse) GetUnknown() *UnknownEvent {
 	if x != nil {
 		if x, ok := x.Event.(*StreamEventsResponse_Unknown); ok {
@@ -1213,6 +1460,20 @@ type StreamEventsResponse_GroupParticipantUpdate struct {
 	GroupParticipantUpdate *GroupParticipantUpdateEvent `protobuf:"bytes,18,opt,name=group_participant_update,json=groupParticipantUpdate,proto3,oneof"`
 }
 
+type StreamEventsResponse_Receipt struct {
+	// Phase 4.2 软状态事件。仅在 StreamEventsRequest.include_soft_events=true
+	// 时才会被 sidecar 翻译并下发；否则在 events.bus 处直接丢弃，零开销。
+	Receipt *ReceiptEvent `protobuf:"bytes,19,opt,name=receipt,proto3,oneof"`
+}
+
+type StreamEventsResponse_Presence struct {
+	Presence *PresenceEvent `protobuf:"bytes,20,opt,name=presence,proto3,oneof"`
+}
+
+type StreamEventsResponse_ChatPresence struct {
+	ChatPresence *ChatPresenceEvent `protobuf:"bytes,21,opt,name=chat_presence,json=chatPresence,proto3,oneof"`
+}
+
 type StreamEventsResponse_Unknown struct {
 	Unknown *UnknownEvent `protobuf:"bytes,99,opt,name=unknown,proto3,oneof"`
 }
@@ -1234,6 +1495,12 @@ func (*StreamEventsResponse_JoinedGroup) isStreamEventsResponse_Event() {}
 func (*StreamEventsResponse_GroupInfo) isStreamEventsResponse_Event() {}
 
 func (*StreamEventsResponse_GroupParticipantUpdate) isStreamEventsResponse_Event() {}
+
+func (*StreamEventsResponse_Receipt) isStreamEventsResponse_Event() {}
+
+func (*StreamEventsResponse_Presence) isStreamEventsResponse_Event() {}
+
+func (*StreamEventsResponse_ChatPresence) isStreamEventsResponse_Event() {}
 
 func (*StreamEventsResponse_Unknown) isStreamEventsResponse_Event() {}
 
@@ -3121,6 +3388,628 @@ func (x *GetGroupInviteLinkResponse) GetInviteLink() string {
 	return ""
 }
 
+type MarkReadRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	AccountKey string                 `protobuf:"bytes,1,opt,name=account_key,json=accountKey,proto3" json:"account_key,omitempty"`
+	// 至少一个；whatsmeow MarkRead 是批量 API。
+	MessageIds []string `protobuf:"bytes,2,rep,name=message_ids,json=messageIds,proto3" json:"message_ids,omitempty"`
+	// 必填；DM 中即对方 JID，群聊中即群 JID。
+	ChatJid string `protobuf:"bytes,3,opt,name=chat_jid,json=chatJid,proto3" json:"chat_jid,omitempty"`
+	// 必填；DM 中等于 chat_jid，群聊中是真正发送者 JID。
+	SenderJid string `protobuf:"bytes,4,opt,name=sender_jid,json=senderJid,proto3" json:"sender_jid,omitempty"`
+	// 可选；空则 sidecar 取 time.Now()。
+	ReadAt *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=read_at,json=readAt,proto3" json:"read_at,omitempty"`
+	// 默认 READ；UNSPECIFIED 等同 READ。
+	ReceiptType   ReceiptType `protobuf:"varint,6,opt,name=receipt_type,json=receiptType,proto3,enum=fastmeow.v1.ReceiptType" json:"receipt_type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MarkReadRequest) Reset() {
+	*x = MarkReadRequest{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MarkReadRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MarkReadRequest) ProtoMessage() {}
+
+func (x *MarkReadRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MarkReadRequest.ProtoReflect.Descriptor instead.
+func (*MarkReadRequest) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *MarkReadRequest) GetAccountKey() string {
+	if x != nil {
+		return x.AccountKey
+	}
+	return ""
+}
+
+func (x *MarkReadRequest) GetMessageIds() []string {
+	if x != nil {
+		return x.MessageIds
+	}
+	return nil
+}
+
+func (x *MarkReadRequest) GetChatJid() string {
+	if x != nil {
+		return x.ChatJid
+	}
+	return ""
+}
+
+func (x *MarkReadRequest) GetSenderJid() string {
+	if x != nil {
+		return x.SenderJid
+	}
+	return ""
+}
+
+func (x *MarkReadRequest) GetReadAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ReadAt
+	}
+	return nil
+}
+
+func (x *MarkReadRequest) GetReceiptType() ReceiptType {
+	if x != nil {
+		return x.ReceiptType
+	}
+	return ReceiptType_RECEIPT_TYPE_UNSPECIFIED
+}
+
+type MarkReadResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MarkReadResponse) Reset() {
+	*x = MarkReadResponse{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MarkReadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MarkReadResponse) ProtoMessage() {}
+
+func (x *MarkReadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MarkReadResponse.ProtoReflect.Descriptor instead.
+func (*MarkReadResponse) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{50}
+}
+
+type SendPresenceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccountKey    string                 `protobuf:"bytes,1,opt,name=account_key,json=accountKey,proto3" json:"account_key,omitempty"`
+	Presence      PresenceType           `protobuf:"varint,2,opt,name=presence,proto3,enum=fastmeow.v1.PresenceType" json:"presence,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SendPresenceRequest) Reset() {
+	*x = SendPresenceRequest{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendPresenceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendPresenceRequest) ProtoMessage() {}
+
+func (x *SendPresenceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendPresenceRequest.ProtoReflect.Descriptor instead.
+func (*SendPresenceRequest) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *SendPresenceRequest) GetAccountKey() string {
+	if x != nil {
+		return x.AccountKey
+	}
+	return ""
+}
+
+func (x *SendPresenceRequest) GetPresence() PresenceType {
+	if x != nil {
+		return x.Presence
+	}
+	return PresenceType_PRESENCE_TYPE_UNSPECIFIED
+}
+
+type SendPresenceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SendPresenceResponse) Reset() {
+	*x = SendPresenceResponse{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendPresenceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendPresenceResponse) ProtoMessage() {}
+
+func (x *SendPresenceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendPresenceResponse.ProtoReflect.Descriptor instead.
+func (*SendPresenceResponse) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{52}
+}
+
+type SendChatPresenceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccountKey    string                 `protobuf:"bytes,1,opt,name=account_key,json=accountKey,proto3" json:"account_key,omitempty"`
+	ChatJid       string                 `protobuf:"bytes,2,opt,name=chat_jid,json=chatJid,proto3" json:"chat_jid,omitempty"`
+	State         ChatPresenceState      `protobuf:"varint,3,opt,name=state,proto3,enum=fastmeow.v1.ChatPresenceState" json:"state,omitempty"`
+	Media         ChatPresenceMedia      `protobuf:"varint,4,opt,name=media,proto3,enum=fastmeow.v1.ChatPresenceMedia" json:"media,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SendChatPresenceRequest) Reset() {
+	*x = SendChatPresenceRequest{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendChatPresenceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendChatPresenceRequest) ProtoMessage() {}
+
+func (x *SendChatPresenceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendChatPresenceRequest.ProtoReflect.Descriptor instead.
+func (*SendChatPresenceRequest) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *SendChatPresenceRequest) GetAccountKey() string {
+	if x != nil {
+		return x.AccountKey
+	}
+	return ""
+}
+
+func (x *SendChatPresenceRequest) GetChatJid() string {
+	if x != nil {
+		return x.ChatJid
+	}
+	return ""
+}
+
+func (x *SendChatPresenceRequest) GetState() ChatPresenceState {
+	if x != nil {
+		return x.State
+	}
+	return ChatPresenceState_CHAT_PRESENCE_STATE_UNSPECIFIED
+}
+
+func (x *SendChatPresenceRequest) GetMedia() ChatPresenceMedia {
+	if x != nil {
+		return x.Media
+	}
+	return ChatPresenceMedia_CHAT_PRESENCE_MEDIA_UNSPECIFIED
+}
+
+type SendChatPresenceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SendChatPresenceResponse) Reset() {
+	*x = SendChatPresenceResponse{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendChatPresenceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendChatPresenceResponse) ProtoMessage() {}
+
+func (x *SendChatPresenceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendChatPresenceResponse.ProtoReflect.Descriptor instead.
+func (*SendChatPresenceResponse) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{54}
+}
+
+type SubscribePresenceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccountKey    string                 `protobuf:"bytes,1,opt,name=account_key,json=accountKey,proto3" json:"account_key,omitempty"`
+	Jid           string                 `protobuf:"bytes,2,opt,name=jid,proto3" json:"jid,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubscribePresenceRequest) Reset() {
+	*x = SubscribePresenceRequest{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubscribePresenceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubscribePresenceRequest) ProtoMessage() {}
+
+func (x *SubscribePresenceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubscribePresenceRequest.ProtoReflect.Descriptor instead.
+func (*SubscribePresenceRequest) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *SubscribePresenceRequest) GetAccountKey() string {
+	if x != nil {
+		return x.AccountKey
+	}
+	return ""
+}
+
+func (x *SubscribePresenceRequest) GetJid() string {
+	if x != nil {
+		return x.Jid
+	}
+	return ""
+}
+
+type SubscribePresenceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SubscribePresenceResponse) Reset() {
+	*x = SubscribePresenceResponse{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SubscribePresenceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SubscribePresenceResponse) ProtoMessage() {}
+
+func (x *SubscribePresenceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SubscribePresenceResponse.ProtoReflect.Descriptor instead.
+func (*SubscribePresenceResponse) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{56}
+}
+
+// 入站回执。whatsmeow events.Receipt 一次可能携带多个 message_ids
+// （服务端批量回执），我们按原样保留 repeated 语义，避免 N 倍事件爆炸。
+// user code 用 F filter `F.has_message_id(...)` 或直接检查
+// `sent_id in event.message_ids` 进行关联。
+type ReceiptEvent struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	MessageIds []string               `protobuf:"bytes,1,rep,name=message_ids,json=messageIds,proto3" json:"message_ids,omitempty"`
+	// 会话 JID（DM 即对方，群聊即群）。
+	ChatJid string `protobuf:"bytes,2,opt,name=chat_jid,json=chatJid,proto3" json:"chat_jid,omitempty"`
+	// 真正发送回执的对端 JID。DM 中等于 chat_jid。
+	SenderJid     string                 `protobuf:"bytes,3,opt,name=sender_jid,json=senderJid,proto3" json:"sender_jid,omitempty"`
+	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	ReceiptType   ReceiptType            `protobuf:"varint,5,opt,name=receipt_type,json=receiptType,proto3,enum=fastmeow.v1.ReceiptType" json:"receipt_type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReceiptEvent) Reset() {
+	*x = ReceiptEvent{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReceiptEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReceiptEvent) ProtoMessage() {}
+
+func (x *ReceiptEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReceiptEvent.ProtoReflect.Descriptor instead.
+func (*ReceiptEvent) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *ReceiptEvent) GetMessageIds() []string {
+	if x != nil {
+		return x.MessageIds
+	}
+	return nil
+}
+
+func (x *ReceiptEvent) GetChatJid() string {
+	if x != nil {
+		return x.ChatJid
+	}
+	return ""
+}
+
+func (x *ReceiptEvent) GetSenderJid() string {
+	if x != nil {
+		return x.SenderJid
+	}
+	return ""
+}
+
+func (x *ReceiptEvent) GetTimestamp() *timestamppb.Timestamp {
+	if x != nil {
+		return x.Timestamp
+	}
+	return nil
+}
+
+func (x *ReceiptEvent) GetReceiptType() ReceiptType {
+	if x != nil {
+		return x.ReceiptType
+	}
+	return ReceiptType_RECEIPT_TYPE_UNSPECIFIED
+}
+
+// 入站全局在线状态变更。订阅后才会收到。
+type PresenceEvent struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	FromJid string                 `protobuf:"bytes,1,opt,name=from_jid,json=fromJid,proto3" json:"from_jid,omitempty"`
+	// true 表示对端已下线；false 表示在线。
+	Unavailable bool `protobuf:"varint,2,opt,name=unavailable,proto3" json:"unavailable,omitempty"`
+	// 上游有时携带 "最后一次活跃时间"；不存在时为 0。
+	LastSeen      *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=last_seen,json=lastSeen,proto3" json:"last_seen,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PresenceEvent) Reset() {
+	*x = PresenceEvent{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PresenceEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PresenceEvent) ProtoMessage() {}
+
+func (x *PresenceEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PresenceEvent.ProtoReflect.Descriptor instead.
+func (*PresenceEvent) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *PresenceEvent) GetFromJid() string {
+	if x != nil {
+		return x.FromJid
+	}
+	return ""
+}
+
+func (x *PresenceEvent) GetUnavailable() bool {
+	if x != nil {
+		return x.Unavailable
+	}
+	return false
+}
+
+func (x *PresenceEvent) GetLastSeen() *timestamppb.Timestamp {
+	if x != nil {
+		return x.LastSeen
+	}
+	return nil
+}
+
+// 入站会话级输入状态变更。即使没有显式 Subscribe，
+// 在共享会话内也会被动接收。
+type ChatPresenceEvent struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// whatsmeow events.ChatPresence.MessageSource.Chat
+	ChatJid string `protobuf:"bytes,1,opt,name=chat_jid,json=chatJid,proto3" json:"chat_jid,omitempty"`
+	// whatsmeow events.ChatPresence.MessageSource.Sender
+	SenderJid     string            `protobuf:"bytes,2,opt,name=sender_jid,json=senderJid,proto3" json:"sender_jid,omitempty"`
+	State         ChatPresenceState `protobuf:"varint,3,opt,name=state,proto3,enum=fastmeow.v1.ChatPresenceState" json:"state,omitempty"`
+	Media         ChatPresenceMedia `protobuf:"varint,4,opt,name=media,proto3,enum=fastmeow.v1.ChatPresenceMedia" json:"media,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ChatPresenceEvent) Reset() {
+	*x = ChatPresenceEvent{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ChatPresenceEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ChatPresenceEvent) ProtoMessage() {}
+
+func (x *ChatPresenceEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ChatPresenceEvent.ProtoReflect.Descriptor instead.
+func (*ChatPresenceEvent) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *ChatPresenceEvent) GetChatJid() string {
+	if x != nil {
+		return x.ChatJid
+	}
+	return ""
+}
+
+func (x *ChatPresenceEvent) GetSenderJid() string {
+	if x != nil {
+		return x.SenderJid
+	}
+	return ""
+}
+
+func (x *ChatPresenceEvent) GetState() ChatPresenceState {
+	if x != nil {
+		return x.State
+	}
+	return ChatPresenceState_CHAT_PRESENCE_STATE_UNSPECIFIED
+}
+
+func (x *ChatPresenceEvent) GetMedia() ChatPresenceMedia {
+	if x != nil {
+		return x.Media
+	}
+	return ChatPresenceMedia_CHAT_PRESENCE_MEDIA_UNSPECIFIED
+}
+
 var File_fastmeow_v1_gateway_proto protoreflect.FileDescriptor
 
 const file_fastmeow_v1_gateway_proto_rawDesc = "" +
@@ -3189,7 +4078,7 @@ const file_fastmeow_v1_gateway_proto_rawDesc = "" +
 	"\adeduped\x18\x03 \x01(\bR\adeduped\"o\n" +
 	"\x13StreamEventsRequest\x12.\n" +
 	"\x13include_soft_events\x18\x01 \x01(\bR\x11includeSoftEvents\x12(\n" +
-	"\x10resume_after_seq\x18\x02 \x01(\x04R\x0eresumeAfterSeq\"\xd8\x06\n" +
+	"\x10resume_after_seq\x18\x02 \x01(\x04R\x0eresumeAfterSeq\"\x90\b\n" +
 	"\x14StreamEventsResponse\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\x04R\x03seq\x12\x1d\n" +
 	"\n" +
@@ -3212,8 +4101,11 @@ const file_fastmeow_v1_gateway_proto_rawDesc = "" +
 	"\n" +
 	"group_info\x18\x11 \x01(\v2\x1b.fastmeow.v1.GroupInfoEventH\x00R\tgroupInfo\x12d\n" +
 	"\x18group_participant_update\x18\x12 \x01(\v2(.fastmeow.v1.GroupParticipantUpdateEventH\x00R\x16groupParticipantUpdate\x125\n" +
+	"\areceipt\x18\x13 \x01(\v2\x19.fastmeow.v1.ReceiptEventH\x00R\areceipt\x128\n" +
+	"\bpresence\x18\x14 \x01(\v2\x1a.fastmeow.v1.PresenceEventH\x00R\bpresence\x12E\n" +
+	"\rchat_presence\x18\x15 \x01(\v2\x1e.fastmeow.v1.ChatPresenceEventH\x00R\fchatPresence\x125\n" +
 	"\aunknown\x18c \x01(\v2\x19.fastmeow.v1.UnknownEventH\x00R\aunknownB\a\n" +
-	"\x05eventJ\x04\b\x13\x10c\"\x10\n" +
+	"\x05eventJ\x04\b\x16\x10c\"\x10\n" +
 	"\x0eConnectedEvent\"+\n" +
 	"\x11DisconnectedEvent\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\">\n" +
@@ -3359,7 +4251,71 @@ const file_fastmeow_v1_gateway_proto_rawDesc = "" +
 	"\x05reset\x18\x03 \x01(\bR\x05reset\"=\n" +
 	"\x1aGetGroupInviteLinkResponse\x12\x1f\n" +
 	"\vinvite_link\x18\x01 \x01(\tR\n" +
-	"inviteLink2\xdb\v\n" +
+	"inviteLink\"\xff\x01\n" +
+	"\x0fMarkReadRequest\x12\x1f\n" +
+	"\vaccount_key\x18\x01 \x01(\tR\n" +
+	"accountKey\x12\x1f\n" +
+	"\vmessage_ids\x18\x02 \x03(\tR\n" +
+	"messageIds\x12\x19\n" +
+	"\bchat_jid\x18\x03 \x01(\tR\achatJid\x12\x1d\n" +
+	"\n" +
+	"sender_jid\x18\x04 \x01(\tR\tsenderJid\x123\n" +
+	"\aread_at\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\x06readAt\x12;\n" +
+	"\freceipt_type\x18\x06 \x01(\x0e2\x18.fastmeow.v1.ReceiptTypeR\vreceiptType\"\x12\n" +
+	"\x10MarkReadResponse\"m\n" +
+	"\x13SendPresenceRequest\x12\x1f\n" +
+	"\vaccount_key\x18\x01 \x01(\tR\n" +
+	"accountKey\x125\n" +
+	"\bpresence\x18\x02 \x01(\x0e2\x19.fastmeow.v1.PresenceTypeR\bpresence\"\x16\n" +
+	"\x14SendPresenceResponse\"\xc1\x01\n" +
+	"\x17SendChatPresenceRequest\x12\x1f\n" +
+	"\vaccount_key\x18\x01 \x01(\tR\n" +
+	"accountKey\x12\x19\n" +
+	"\bchat_jid\x18\x02 \x01(\tR\achatJid\x124\n" +
+	"\x05state\x18\x03 \x01(\x0e2\x1e.fastmeow.v1.ChatPresenceStateR\x05state\x124\n" +
+	"\x05media\x18\x04 \x01(\x0e2\x1e.fastmeow.v1.ChatPresenceMediaR\x05media\"\x1a\n" +
+	"\x18SendChatPresenceResponse\"M\n" +
+	"\x18SubscribePresenceRequest\x12\x1f\n" +
+	"\vaccount_key\x18\x01 \x01(\tR\n" +
+	"accountKey\x12\x10\n" +
+	"\x03jid\x18\x02 \x01(\tR\x03jid\"\x1b\n" +
+	"\x19SubscribePresenceResponse\"\xe0\x01\n" +
+	"\fReceiptEvent\x12\x1f\n" +
+	"\vmessage_ids\x18\x01 \x03(\tR\n" +
+	"messageIds\x12\x19\n" +
+	"\bchat_jid\x18\x02 \x01(\tR\achatJid\x12\x1d\n" +
+	"\n" +
+	"sender_jid\x18\x03 \x01(\tR\tsenderJid\x128\n" +
+	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12;\n" +
+	"\freceipt_type\x18\x05 \x01(\x0e2\x18.fastmeow.v1.ReceiptTypeR\vreceiptType\"\x85\x01\n" +
+	"\rPresenceEvent\x12\x19\n" +
+	"\bfrom_jid\x18\x01 \x01(\tR\afromJid\x12 \n" +
+	"\vunavailable\x18\x02 \x01(\bR\vunavailable\x127\n" +
+	"\tlast_seen\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\blastSeen\"\xb9\x01\n" +
+	"\x11ChatPresenceEvent\x12\x19\n" +
+	"\bchat_jid\x18\x01 \x01(\tR\achatJid\x12\x1d\n" +
+	"\n" +
+	"sender_jid\x18\x02 \x01(\tR\tsenderJid\x124\n" +
+	"\x05state\x18\x03 \x01(\x0e2\x1e.fastmeow.v1.ChatPresenceStateR\x05state\x124\n" +
+	"\x05media\x18\x04 \x01(\x0e2\x1e.fastmeow.v1.ChatPresenceMediaR\x05media*\x90\x01\n" +
+	"\vReceiptType\x12\x1c\n" +
+	"\x18RECEIPT_TYPE_UNSPECIFIED\x10\x00\x12\x1a\n" +
+	"\x16RECEIPT_TYPE_DELIVERED\x10\x01\x12\x15\n" +
+	"\x11RECEIPT_TYPE_READ\x10\x02\x12\x17\n" +
+	"\x13RECEIPT_TYPE_PLAYED\x10\x03\x12\x17\n" +
+	"\x13RECEIPT_TYPE_SERVER\x10\x04*i\n" +
+	"\fPresenceType\x12\x1d\n" +
+	"\x19PRESENCE_TYPE_UNSPECIFIED\x10\x00\x12\x1b\n" +
+	"\x17PRESENCE_TYPE_AVAILABLE\x10\x01\x12\x1d\n" +
+	"\x19PRESENCE_TYPE_UNAVAILABLE\x10\x02*{\n" +
+	"\x11ChatPresenceState\x12#\n" +
+	"\x1fCHAT_PRESENCE_STATE_UNSPECIFIED\x10\x00\x12!\n" +
+	"\x1dCHAT_PRESENCE_STATE_COMPOSING\x10\x01\x12\x1e\n" +
+	"\x1aCHAT_PRESENCE_STATE_PAUSED\x10\x02*u\n" +
+	"\x11ChatPresenceMedia\x12#\n" +
+	"\x1fCHAT_PRESENCE_MEDIA_UNSPECIFIED\x10\x00\x12\x1c\n" +
+	"\x18CHAT_PRESENCE_MEDIA_TEXT\x10\x01\x12\x1d\n" +
+	"\x19CHAT_PRESENCE_MEDIA_AUDIO\x10\x022\xbe\x0e\n" +
 	"\x0eGatewayService\x12;\n" +
 	"\x04Ping\x12\x18.fastmeow.v1.PingRequest\x1a\x19.fastmeow.v1.PingResponse\x12V\n" +
 	"\rEnsureAccount\x12!.fastmeow.v1.EnsureAccountRequest\x1a\".fastmeow.v1.EnsureAccountResponse\x12D\n" +
@@ -3379,6 +4335,10 @@ const file_fastmeow_v1_gateway_proto_rawDesc = "" +
 	"\x13UpdateGroupSettings\x12'.fastmeow.v1.UpdateGroupSettingsRequest\x1a(.fastmeow.v1.UpdateGroupSettingsResponse\x12t\n" +
 	"\x17UpdateGroupParticipants\x12+.fastmeow.v1.UpdateGroupParticipantsRequest\x1a,.fastmeow.v1.UpdateGroupParticipantsResponse\x12e\n" +
 	"\x12GetGroupInviteLink\x12&.fastmeow.v1.GetGroupInviteLinkRequest\x1a'.fastmeow.v1.GetGroupInviteLinkResponse\x12G\n" +
+	"\bMarkRead\x12\x1c.fastmeow.v1.MarkReadRequest\x1a\x1d.fastmeow.v1.MarkReadResponse\x12S\n" +
+	"\fSendPresence\x12 .fastmeow.v1.SendPresenceRequest\x1a!.fastmeow.v1.SendPresenceResponse\x12_\n" +
+	"\x10SendChatPresence\x12$.fastmeow.v1.SendChatPresenceRequest\x1a%.fastmeow.v1.SendChatPresenceResponse\x12b\n" +
+	"\x11SubscribePresence\x12%.fastmeow.v1.SubscribePresenceRequest\x1a&.fastmeow.v1.SubscribePresenceResponse\x12G\n" +
 	"\bShutdown\x12\x1c.fastmeow.v1.ShutdownRequest\x1a\x1d.fastmeow.v1.ShutdownResponseB@Z>github.com/jianjian2048/fastmeow/gen/go/fastmeow/v1;fastmeowv1b\x06proto3"
 
 var (
@@ -3393,133 +4353,169 @@ func file_fastmeow_v1_gateway_proto_rawDescGZIP() []byte {
 	return file_fastmeow_v1_gateway_proto_rawDescData
 }
 
-var file_fastmeow_v1_gateway_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_fastmeow_v1_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 49)
+var file_fastmeow_v1_gateway_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
+var file_fastmeow_v1_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 60)
 var file_fastmeow_v1_gateway_proto_goTypes = []any{
-	(AccountState_State)(0),                                 // 0: fastmeow.v1.AccountState.State
-	(GroupParticipantUpdateEvent_GroupParticipantAction)(0), // 1: fastmeow.v1.GroupParticipantUpdateEvent.GroupParticipantAction
-	(*PingRequest)(nil),                                     // 2: fastmeow.v1.PingRequest
-	(*PingResponse)(nil),                                    // 3: fastmeow.v1.PingResponse
-	(*AccountState)(nil),                                    // 4: fastmeow.v1.AccountState
-	(*EnsureAccountRequest)(nil),                            // 5: fastmeow.v1.EnsureAccountRequest
-	(*EnsureAccountResponse)(nil),                           // 6: fastmeow.v1.EnsureAccountResponse
-	(*ConnectRequest)(nil),                                  // 7: fastmeow.v1.ConnectRequest
-	(*ConnectResponse)(nil),                                 // 8: fastmeow.v1.ConnectResponse
-	(*DisconnectRequest)(nil),                               // 9: fastmeow.v1.DisconnectRequest
-	(*DisconnectResponse)(nil),                              // 10: fastmeow.v1.DisconnectResponse
-	(*LogoutRequest)(nil),                                   // 11: fastmeow.v1.LogoutRequest
-	(*LogoutResponse)(nil),                                  // 12: fastmeow.v1.LogoutResponse
-	(*SendMessageRequest)(nil),                              // 13: fastmeow.v1.SendMessageRequest
-	(*TextBody)(nil),                                        // 14: fastmeow.v1.TextBody
-	(*SendMessageResponse)(nil),                             // 15: fastmeow.v1.SendMessageResponse
-	(*StreamEventsRequest)(nil),                             // 16: fastmeow.v1.StreamEventsRequest
-	(*StreamEventsResponse)(nil),                            // 17: fastmeow.v1.StreamEventsResponse
-	(*ConnectedEvent)(nil),                                  // 18: fastmeow.v1.ConnectedEvent
-	(*DisconnectedEvent)(nil),                               // 19: fastmeow.v1.DisconnectedEvent
-	(*QREvent)(nil),                                         // 20: fastmeow.v1.QREvent
-	(*PairSuccessEvent)(nil),                                // 21: fastmeow.v1.PairSuccessEvent
-	(*LoggedOutEvent)(nil),                                  // 22: fastmeow.v1.LoggedOutEvent
-	(*MessageEvent)(nil),                                    // 23: fastmeow.v1.MessageEvent
-	(*UnknownEvent)(nil),                                    // 24: fastmeow.v1.UnknownEvent
-	(*JoinedGroupEvent)(nil),                                // 25: fastmeow.v1.JoinedGroupEvent
-	(*GroupInfoEvent)(nil),                                  // 26: fastmeow.v1.GroupInfoEvent
-	(*GroupParticipantUpdateEvent)(nil),                     // 27: fastmeow.v1.GroupParticipantUpdateEvent
-	(*GroupInfo)(nil),                                       // 28: fastmeow.v1.GroupInfo
-	(*GroupParticipant)(nil),                                // 29: fastmeow.v1.GroupParticipant
-	(*ShutdownRequest)(nil),                                 // 30: fastmeow.v1.ShutdownRequest
-	(*ShutdownResponse)(nil),                                // 31: fastmeow.v1.ShutdownResponse
-	(*ListJoinedGroupsRequest)(nil),                         // 32: fastmeow.v1.ListJoinedGroupsRequest
-	(*ListJoinedGroupsResponse)(nil),                        // 33: fastmeow.v1.ListJoinedGroupsResponse
-	(*GetGroupInfoRequest)(nil),                             // 34: fastmeow.v1.GetGroupInfoRequest
-	(*GetGroupInfoResponse)(nil),                            // 35: fastmeow.v1.GetGroupInfoResponse
-	(*PreviewGroupInviteRequest)(nil),                       // 36: fastmeow.v1.PreviewGroupInviteRequest
-	(*PreviewGroupInviteResponse)(nil),                      // 37: fastmeow.v1.PreviewGroupInviteResponse
-	(*JoinGroupViaInviteRequest)(nil),                       // 38: fastmeow.v1.JoinGroupViaInviteRequest
-	(*JoinGroupViaInviteResponse)(nil),                      // 39: fastmeow.v1.JoinGroupViaInviteResponse
-	(*LeaveGroupRequest)(nil),                               // 40: fastmeow.v1.LeaveGroupRequest
-	(*LeaveGroupResponse)(nil),                              // 41: fastmeow.v1.LeaveGroupResponse
-	(*CreateGroupRequest)(nil),                              // 42: fastmeow.v1.CreateGroupRequest
-	(*CreateGroupResponse)(nil),                             // 43: fastmeow.v1.CreateGroupResponse
-	(*UpdateGroupSettingsRequest)(nil),                      // 44: fastmeow.v1.UpdateGroupSettingsRequest
-	(*UpdateGroupSettingsResponse)(nil),                     // 45: fastmeow.v1.UpdateGroupSettingsResponse
-	(*UpdateGroupParticipantsRequest)(nil),                  // 46: fastmeow.v1.UpdateGroupParticipantsRequest
-	(*UpdateGroupParticipantsResponse)(nil),                 // 47: fastmeow.v1.UpdateGroupParticipantsResponse
-	(*GroupParticipantUpdateResult)(nil),                    // 48: fastmeow.v1.GroupParticipantUpdateResult
-	(*GetGroupInviteLinkRequest)(nil),                       // 49: fastmeow.v1.GetGroupInviteLinkRequest
-	(*GetGroupInviteLinkResponse)(nil),                      // 50: fastmeow.v1.GetGroupInviteLinkResponse
-	(*timestamppb.Timestamp)(nil),                           // 51: google.protobuf.Timestamp
+	(ReceiptType)(0),        // 0: fastmeow.v1.ReceiptType
+	(PresenceType)(0),       // 1: fastmeow.v1.PresenceType
+	(ChatPresenceState)(0),  // 2: fastmeow.v1.ChatPresenceState
+	(ChatPresenceMedia)(0),  // 3: fastmeow.v1.ChatPresenceMedia
+	(AccountState_State)(0), // 4: fastmeow.v1.AccountState.State
+	(GroupParticipantUpdateEvent_GroupParticipantAction)(0), // 5: fastmeow.v1.GroupParticipantUpdateEvent.GroupParticipantAction
+	(*PingRequest)(nil),                     // 6: fastmeow.v1.PingRequest
+	(*PingResponse)(nil),                    // 7: fastmeow.v1.PingResponse
+	(*AccountState)(nil),                    // 8: fastmeow.v1.AccountState
+	(*EnsureAccountRequest)(nil),            // 9: fastmeow.v1.EnsureAccountRequest
+	(*EnsureAccountResponse)(nil),           // 10: fastmeow.v1.EnsureAccountResponse
+	(*ConnectRequest)(nil),                  // 11: fastmeow.v1.ConnectRequest
+	(*ConnectResponse)(nil),                 // 12: fastmeow.v1.ConnectResponse
+	(*DisconnectRequest)(nil),               // 13: fastmeow.v1.DisconnectRequest
+	(*DisconnectResponse)(nil),              // 14: fastmeow.v1.DisconnectResponse
+	(*LogoutRequest)(nil),                   // 15: fastmeow.v1.LogoutRequest
+	(*LogoutResponse)(nil),                  // 16: fastmeow.v1.LogoutResponse
+	(*SendMessageRequest)(nil),              // 17: fastmeow.v1.SendMessageRequest
+	(*TextBody)(nil),                        // 18: fastmeow.v1.TextBody
+	(*SendMessageResponse)(nil),             // 19: fastmeow.v1.SendMessageResponse
+	(*StreamEventsRequest)(nil),             // 20: fastmeow.v1.StreamEventsRequest
+	(*StreamEventsResponse)(nil),            // 21: fastmeow.v1.StreamEventsResponse
+	(*ConnectedEvent)(nil),                  // 22: fastmeow.v1.ConnectedEvent
+	(*DisconnectedEvent)(nil),               // 23: fastmeow.v1.DisconnectedEvent
+	(*QREvent)(nil),                         // 24: fastmeow.v1.QREvent
+	(*PairSuccessEvent)(nil),                // 25: fastmeow.v1.PairSuccessEvent
+	(*LoggedOutEvent)(nil),                  // 26: fastmeow.v1.LoggedOutEvent
+	(*MessageEvent)(nil),                    // 27: fastmeow.v1.MessageEvent
+	(*UnknownEvent)(nil),                    // 28: fastmeow.v1.UnknownEvent
+	(*JoinedGroupEvent)(nil),                // 29: fastmeow.v1.JoinedGroupEvent
+	(*GroupInfoEvent)(nil),                  // 30: fastmeow.v1.GroupInfoEvent
+	(*GroupParticipantUpdateEvent)(nil),     // 31: fastmeow.v1.GroupParticipantUpdateEvent
+	(*GroupInfo)(nil),                       // 32: fastmeow.v1.GroupInfo
+	(*GroupParticipant)(nil),                // 33: fastmeow.v1.GroupParticipant
+	(*ShutdownRequest)(nil),                 // 34: fastmeow.v1.ShutdownRequest
+	(*ShutdownResponse)(nil),                // 35: fastmeow.v1.ShutdownResponse
+	(*ListJoinedGroupsRequest)(nil),         // 36: fastmeow.v1.ListJoinedGroupsRequest
+	(*ListJoinedGroupsResponse)(nil),        // 37: fastmeow.v1.ListJoinedGroupsResponse
+	(*GetGroupInfoRequest)(nil),             // 38: fastmeow.v1.GetGroupInfoRequest
+	(*GetGroupInfoResponse)(nil),            // 39: fastmeow.v1.GetGroupInfoResponse
+	(*PreviewGroupInviteRequest)(nil),       // 40: fastmeow.v1.PreviewGroupInviteRequest
+	(*PreviewGroupInviteResponse)(nil),      // 41: fastmeow.v1.PreviewGroupInviteResponse
+	(*JoinGroupViaInviteRequest)(nil),       // 42: fastmeow.v1.JoinGroupViaInviteRequest
+	(*JoinGroupViaInviteResponse)(nil),      // 43: fastmeow.v1.JoinGroupViaInviteResponse
+	(*LeaveGroupRequest)(nil),               // 44: fastmeow.v1.LeaveGroupRequest
+	(*LeaveGroupResponse)(nil),              // 45: fastmeow.v1.LeaveGroupResponse
+	(*CreateGroupRequest)(nil),              // 46: fastmeow.v1.CreateGroupRequest
+	(*CreateGroupResponse)(nil),             // 47: fastmeow.v1.CreateGroupResponse
+	(*UpdateGroupSettingsRequest)(nil),      // 48: fastmeow.v1.UpdateGroupSettingsRequest
+	(*UpdateGroupSettingsResponse)(nil),     // 49: fastmeow.v1.UpdateGroupSettingsResponse
+	(*UpdateGroupParticipantsRequest)(nil),  // 50: fastmeow.v1.UpdateGroupParticipantsRequest
+	(*UpdateGroupParticipantsResponse)(nil), // 51: fastmeow.v1.UpdateGroupParticipantsResponse
+	(*GroupParticipantUpdateResult)(nil),    // 52: fastmeow.v1.GroupParticipantUpdateResult
+	(*GetGroupInviteLinkRequest)(nil),       // 53: fastmeow.v1.GetGroupInviteLinkRequest
+	(*GetGroupInviteLinkResponse)(nil),      // 54: fastmeow.v1.GetGroupInviteLinkResponse
+	(*MarkReadRequest)(nil),                 // 55: fastmeow.v1.MarkReadRequest
+	(*MarkReadResponse)(nil),                // 56: fastmeow.v1.MarkReadResponse
+	(*SendPresenceRequest)(nil),             // 57: fastmeow.v1.SendPresenceRequest
+	(*SendPresenceResponse)(nil),            // 58: fastmeow.v1.SendPresenceResponse
+	(*SendChatPresenceRequest)(nil),         // 59: fastmeow.v1.SendChatPresenceRequest
+	(*SendChatPresenceResponse)(nil),        // 60: fastmeow.v1.SendChatPresenceResponse
+	(*SubscribePresenceRequest)(nil),        // 61: fastmeow.v1.SubscribePresenceRequest
+	(*SubscribePresenceResponse)(nil),       // 62: fastmeow.v1.SubscribePresenceResponse
+	(*ReceiptEvent)(nil),                    // 63: fastmeow.v1.ReceiptEvent
+	(*PresenceEvent)(nil),                   // 64: fastmeow.v1.PresenceEvent
+	(*ChatPresenceEvent)(nil),               // 65: fastmeow.v1.ChatPresenceEvent
+	(*timestamppb.Timestamp)(nil),           // 66: google.protobuf.Timestamp
 }
 var file_fastmeow_v1_gateway_proto_depIdxs = []int32{
-	0,  // 0: fastmeow.v1.AccountState.state:type_name -> fastmeow.v1.AccountState.State
-	4,  // 1: fastmeow.v1.EnsureAccountResponse.state:type_name -> fastmeow.v1.AccountState
-	4,  // 2: fastmeow.v1.ConnectResponse.state:type_name -> fastmeow.v1.AccountState
-	4,  // 3: fastmeow.v1.DisconnectResponse.state:type_name -> fastmeow.v1.AccountState
-	4,  // 4: fastmeow.v1.LogoutResponse.state:type_name -> fastmeow.v1.AccountState
-	14, // 5: fastmeow.v1.SendMessageRequest.text:type_name -> fastmeow.v1.TextBody
-	51, // 6: fastmeow.v1.SendMessageResponse.server_timestamp:type_name -> google.protobuf.Timestamp
-	51, // 7: fastmeow.v1.StreamEventsResponse.observed_at:type_name -> google.protobuf.Timestamp
-	18, // 8: fastmeow.v1.StreamEventsResponse.connected:type_name -> fastmeow.v1.ConnectedEvent
-	19, // 9: fastmeow.v1.StreamEventsResponse.disconnected:type_name -> fastmeow.v1.DisconnectedEvent
-	20, // 10: fastmeow.v1.StreamEventsResponse.qr:type_name -> fastmeow.v1.QREvent
-	21, // 11: fastmeow.v1.StreamEventsResponse.pair_success:type_name -> fastmeow.v1.PairSuccessEvent
-	23, // 12: fastmeow.v1.StreamEventsResponse.message:type_name -> fastmeow.v1.MessageEvent
-	22, // 13: fastmeow.v1.StreamEventsResponse.logged_out:type_name -> fastmeow.v1.LoggedOutEvent
-	25, // 14: fastmeow.v1.StreamEventsResponse.joined_group:type_name -> fastmeow.v1.JoinedGroupEvent
-	26, // 15: fastmeow.v1.StreamEventsResponse.group_info:type_name -> fastmeow.v1.GroupInfoEvent
-	27, // 16: fastmeow.v1.StreamEventsResponse.group_participant_update:type_name -> fastmeow.v1.GroupParticipantUpdateEvent
-	24, // 17: fastmeow.v1.StreamEventsResponse.unknown:type_name -> fastmeow.v1.UnknownEvent
-	51, // 18: fastmeow.v1.MessageEvent.timestamp:type_name -> google.protobuf.Timestamp
-	28, // 19: fastmeow.v1.JoinedGroupEvent.group_info:type_name -> fastmeow.v1.GroupInfo
-	28, // 20: fastmeow.v1.GroupInfoEvent.group_info:type_name -> fastmeow.v1.GroupInfo
-	1,  // 21: fastmeow.v1.GroupParticipantUpdateEvent.action:type_name -> fastmeow.v1.GroupParticipantUpdateEvent.GroupParticipantAction
-	51, // 22: fastmeow.v1.GroupInfo.creation_timestamp:type_name -> google.protobuf.Timestamp
-	29, // 23: fastmeow.v1.GroupInfo.participants:type_name -> fastmeow.v1.GroupParticipant
-	28, // 24: fastmeow.v1.ListJoinedGroupsResponse.groups:type_name -> fastmeow.v1.GroupInfo
-	28, // 25: fastmeow.v1.GetGroupInfoResponse.group_info:type_name -> fastmeow.v1.GroupInfo
-	28, // 26: fastmeow.v1.PreviewGroupInviteResponse.group_info:type_name -> fastmeow.v1.GroupInfo
-	28, // 27: fastmeow.v1.CreateGroupResponse.group_info:type_name -> fastmeow.v1.GroupInfo
-	28, // 28: fastmeow.v1.UpdateGroupSettingsResponse.group_info:type_name -> fastmeow.v1.GroupInfo
-	1,  // 29: fastmeow.v1.UpdateGroupParticipantsRequest.action:type_name -> fastmeow.v1.GroupParticipantUpdateEvent.GroupParticipantAction
-	48, // 30: fastmeow.v1.UpdateGroupParticipantsResponse.results:type_name -> fastmeow.v1.GroupParticipantUpdateResult
-	2,  // 31: fastmeow.v1.GatewayService.Ping:input_type -> fastmeow.v1.PingRequest
-	5,  // 32: fastmeow.v1.GatewayService.EnsureAccount:input_type -> fastmeow.v1.EnsureAccountRequest
-	7,  // 33: fastmeow.v1.GatewayService.Connect:input_type -> fastmeow.v1.ConnectRequest
-	9,  // 34: fastmeow.v1.GatewayService.Disconnect:input_type -> fastmeow.v1.DisconnectRequest
-	11, // 35: fastmeow.v1.GatewayService.Logout:input_type -> fastmeow.v1.LogoutRequest
-	13, // 36: fastmeow.v1.GatewayService.SendMessage:input_type -> fastmeow.v1.SendMessageRequest
-	16, // 37: fastmeow.v1.GatewayService.StreamEvents:input_type -> fastmeow.v1.StreamEventsRequest
-	32, // 38: fastmeow.v1.GatewayService.ListJoinedGroups:input_type -> fastmeow.v1.ListJoinedGroupsRequest
-	34, // 39: fastmeow.v1.GatewayService.GetGroupInfo:input_type -> fastmeow.v1.GetGroupInfoRequest
-	36, // 40: fastmeow.v1.GatewayService.PreviewGroupInvite:input_type -> fastmeow.v1.PreviewGroupInviteRequest
-	38, // 41: fastmeow.v1.GatewayService.JoinGroupViaInvite:input_type -> fastmeow.v1.JoinGroupViaInviteRequest
-	40, // 42: fastmeow.v1.GatewayService.LeaveGroup:input_type -> fastmeow.v1.LeaveGroupRequest
-	42, // 43: fastmeow.v1.GatewayService.CreateGroup:input_type -> fastmeow.v1.CreateGroupRequest
-	44, // 44: fastmeow.v1.GatewayService.UpdateGroupSettings:input_type -> fastmeow.v1.UpdateGroupSettingsRequest
-	46, // 45: fastmeow.v1.GatewayService.UpdateGroupParticipants:input_type -> fastmeow.v1.UpdateGroupParticipantsRequest
-	49, // 46: fastmeow.v1.GatewayService.GetGroupInviteLink:input_type -> fastmeow.v1.GetGroupInviteLinkRequest
-	30, // 47: fastmeow.v1.GatewayService.Shutdown:input_type -> fastmeow.v1.ShutdownRequest
-	3,  // 48: fastmeow.v1.GatewayService.Ping:output_type -> fastmeow.v1.PingResponse
-	6,  // 49: fastmeow.v1.GatewayService.EnsureAccount:output_type -> fastmeow.v1.EnsureAccountResponse
-	8,  // 50: fastmeow.v1.GatewayService.Connect:output_type -> fastmeow.v1.ConnectResponse
-	10, // 51: fastmeow.v1.GatewayService.Disconnect:output_type -> fastmeow.v1.DisconnectResponse
-	12, // 52: fastmeow.v1.GatewayService.Logout:output_type -> fastmeow.v1.LogoutResponse
-	15, // 53: fastmeow.v1.GatewayService.SendMessage:output_type -> fastmeow.v1.SendMessageResponse
-	17, // 54: fastmeow.v1.GatewayService.StreamEvents:output_type -> fastmeow.v1.StreamEventsResponse
-	33, // 55: fastmeow.v1.GatewayService.ListJoinedGroups:output_type -> fastmeow.v1.ListJoinedGroupsResponse
-	35, // 56: fastmeow.v1.GatewayService.GetGroupInfo:output_type -> fastmeow.v1.GetGroupInfoResponse
-	37, // 57: fastmeow.v1.GatewayService.PreviewGroupInvite:output_type -> fastmeow.v1.PreviewGroupInviteResponse
-	39, // 58: fastmeow.v1.GatewayService.JoinGroupViaInvite:output_type -> fastmeow.v1.JoinGroupViaInviteResponse
-	41, // 59: fastmeow.v1.GatewayService.LeaveGroup:output_type -> fastmeow.v1.LeaveGroupResponse
-	43, // 60: fastmeow.v1.GatewayService.CreateGroup:output_type -> fastmeow.v1.CreateGroupResponse
-	45, // 61: fastmeow.v1.GatewayService.UpdateGroupSettings:output_type -> fastmeow.v1.UpdateGroupSettingsResponse
-	47, // 62: fastmeow.v1.GatewayService.UpdateGroupParticipants:output_type -> fastmeow.v1.UpdateGroupParticipantsResponse
-	50, // 63: fastmeow.v1.GatewayService.GetGroupInviteLink:output_type -> fastmeow.v1.GetGroupInviteLinkResponse
-	31, // 64: fastmeow.v1.GatewayService.Shutdown:output_type -> fastmeow.v1.ShutdownResponse
-	48, // [48:65] is the sub-list for method output_type
-	31, // [31:48] is the sub-list for method input_type
-	31, // [31:31] is the sub-list for extension type_name
-	31, // [31:31] is the sub-list for extension extendee
-	0,  // [0:31] is the sub-list for field type_name
+	4,  // 0: fastmeow.v1.AccountState.state:type_name -> fastmeow.v1.AccountState.State
+	8,  // 1: fastmeow.v1.EnsureAccountResponse.state:type_name -> fastmeow.v1.AccountState
+	8,  // 2: fastmeow.v1.ConnectResponse.state:type_name -> fastmeow.v1.AccountState
+	8,  // 3: fastmeow.v1.DisconnectResponse.state:type_name -> fastmeow.v1.AccountState
+	8,  // 4: fastmeow.v1.LogoutResponse.state:type_name -> fastmeow.v1.AccountState
+	18, // 5: fastmeow.v1.SendMessageRequest.text:type_name -> fastmeow.v1.TextBody
+	66, // 6: fastmeow.v1.SendMessageResponse.server_timestamp:type_name -> google.protobuf.Timestamp
+	66, // 7: fastmeow.v1.StreamEventsResponse.observed_at:type_name -> google.protobuf.Timestamp
+	22, // 8: fastmeow.v1.StreamEventsResponse.connected:type_name -> fastmeow.v1.ConnectedEvent
+	23, // 9: fastmeow.v1.StreamEventsResponse.disconnected:type_name -> fastmeow.v1.DisconnectedEvent
+	24, // 10: fastmeow.v1.StreamEventsResponse.qr:type_name -> fastmeow.v1.QREvent
+	25, // 11: fastmeow.v1.StreamEventsResponse.pair_success:type_name -> fastmeow.v1.PairSuccessEvent
+	27, // 12: fastmeow.v1.StreamEventsResponse.message:type_name -> fastmeow.v1.MessageEvent
+	26, // 13: fastmeow.v1.StreamEventsResponse.logged_out:type_name -> fastmeow.v1.LoggedOutEvent
+	29, // 14: fastmeow.v1.StreamEventsResponse.joined_group:type_name -> fastmeow.v1.JoinedGroupEvent
+	30, // 15: fastmeow.v1.StreamEventsResponse.group_info:type_name -> fastmeow.v1.GroupInfoEvent
+	31, // 16: fastmeow.v1.StreamEventsResponse.group_participant_update:type_name -> fastmeow.v1.GroupParticipantUpdateEvent
+	63, // 17: fastmeow.v1.StreamEventsResponse.receipt:type_name -> fastmeow.v1.ReceiptEvent
+	64, // 18: fastmeow.v1.StreamEventsResponse.presence:type_name -> fastmeow.v1.PresenceEvent
+	65, // 19: fastmeow.v1.StreamEventsResponse.chat_presence:type_name -> fastmeow.v1.ChatPresenceEvent
+	28, // 20: fastmeow.v1.StreamEventsResponse.unknown:type_name -> fastmeow.v1.UnknownEvent
+	66, // 21: fastmeow.v1.MessageEvent.timestamp:type_name -> google.protobuf.Timestamp
+	32, // 22: fastmeow.v1.JoinedGroupEvent.group_info:type_name -> fastmeow.v1.GroupInfo
+	32, // 23: fastmeow.v1.GroupInfoEvent.group_info:type_name -> fastmeow.v1.GroupInfo
+	5,  // 24: fastmeow.v1.GroupParticipantUpdateEvent.action:type_name -> fastmeow.v1.GroupParticipantUpdateEvent.GroupParticipantAction
+	66, // 25: fastmeow.v1.GroupInfo.creation_timestamp:type_name -> google.protobuf.Timestamp
+	33, // 26: fastmeow.v1.GroupInfo.participants:type_name -> fastmeow.v1.GroupParticipant
+	32, // 27: fastmeow.v1.ListJoinedGroupsResponse.groups:type_name -> fastmeow.v1.GroupInfo
+	32, // 28: fastmeow.v1.GetGroupInfoResponse.group_info:type_name -> fastmeow.v1.GroupInfo
+	32, // 29: fastmeow.v1.PreviewGroupInviteResponse.group_info:type_name -> fastmeow.v1.GroupInfo
+	32, // 30: fastmeow.v1.CreateGroupResponse.group_info:type_name -> fastmeow.v1.GroupInfo
+	32, // 31: fastmeow.v1.UpdateGroupSettingsResponse.group_info:type_name -> fastmeow.v1.GroupInfo
+	5,  // 32: fastmeow.v1.UpdateGroupParticipantsRequest.action:type_name -> fastmeow.v1.GroupParticipantUpdateEvent.GroupParticipantAction
+	52, // 33: fastmeow.v1.UpdateGroupParticipantsResponse.results:type_name -> fastmeow.v1.GroupParticipantUpdateResult
+	66, // 34: fastmeow.v1.MarkReadRequest.read_at:type_name -> google.protobuf.Timestamp
+	0,  // 35: fastmeow.v1.MarkReadRequest.receipt_type:type_name -> fastmeow.v1.ReceiptType
+	1,  // 36: fastmeow.v1.SendPresenceRequest.presence:type_name -> fastmeow.v1.PresenceType
+	2,  // 37: fastmeow.v1.SendChatPresenceRequest.state:type_name -> fastmeow.v1.ChatPresenceState
+	3,  // 38: fastmeow.v1.SendChatPresenceRequest.media:type_name -> fastmeow.v1.ChatPresenceMedia
+	66, // 39: fastmeow.v1.ReceiptEvent.timestamp:type_name -> google.protobuf.Timestamp
+	0,  // 40: fastmeow.v1.ReceiptEvent.receipt_type:type_name -> fastmeow.v1.ReceiptType
+	66, // 41: fastmeow.v1.PresenceEvent.last_seen:type_name -> google.protobuf.Timestamp
+	2,  // 42: fastmeow.v1.ChatPresenceEvent.state:type_name -> fastmeow.v1.ChatPresenceState
+	3,  // 43: fastmeow.v1.ChatPresenceEvent.media:type_name -> fastmeow.v1.ChatPresenceMedia
+	6,  // 44: fastmeow.v1.GatewayService.Ping:input_type -> fastmeow.v1.PingRequest
+	9,  // 45: fastmeow.v1.GatewayService.EnsureAccount:input_type -> fastmeow.v1.EnsureAccountRequest
+	11, // 46: fastmeow.v1.GatewayService.Connect:input_type -> fastmeow.v1.ConnectRequest
+	13, // 47: fastmeow.v1.GatewayService.Disconnect:input_type -> fastmeow.v1.DisconnectRequest
+	15, // 48: fastmeow.v1.GatewayService.Logout:input_type -> fastmeow.v1.LogoutRequest
+	17, // 49: fastmeow.v1.GatewayService.SendMessage:input_type -> fastmeow.v1.SendMessageRequest
+	20, // 50: fastmeow.v1.GatewayService.StreamEvents:input_type -> fastmeow.v1.StreamEventsRequest
+	36, // 51: fastmeow.v1.GatewayService.ListJoinedGroups:input_type -> fastmeow.v1.ListJoinedGroupsRequest
+	38, // 52: fastmeow.v1.GatewayService.GetGroupInfo:input_type -> fastmeow.v1.GetGroupInfoRequest
+	40, // 53: fastmeow.v1.GatewayService.PreviewGroupInvite:input_type -> fastmeow.v1.PreviewGroupInviteRequest
+	42, // 54: fastmeow.v1.GatewayService.JoinGroupViaInvite:input_type -> fastmeow.v1.JoinGroupViaInviteRequest
+	44, // 55: fastmeow.v1.GatewayService.LeaveGroup:input_type -> fastmeow.v1.LeaveGroupRequest
+	46, // 56: fastmeow.v1.GatewayService.CreateGroup:input_type -> fastmeow.v1.CreateGroupRequest
+	48, // 57: fastmeow.v1.GatewayService.UpdateGroupSettings:input_type -> fastmeow.v1.UpdateGroupSettingsRequest
+	50, // 58: fastmeow.v1.GatewayService.UpdateGroupParticipants:input_type -> fastmeow.v1.UpdateGroupParticipantsRequest
+	53, // 59: fastmeow.v1.GatewayService.GetGroupInviteLink:input_type -> fastmeow.v1.GetGroupInviteLinkRequest
+	55, // 60: fastmeow.v1.GatewayService.MarkRead:input_type -> fastmeow.v1.MarkReadRequest
+	57, // 61: fastmeow.v1.GatewayService.SendPresence:input_type -> fastmeow.v1.SendPresenceRequest
+	59, // 62: fastmeow.v1.GatewayService.SendChatPresence:input_type -> fastmeow.v1.SendChatPresenceRequest
+	61, // 63: fastmeow.v1.GatewayService.SubscribePresence:input_type -> fastmeow.v1.SubscribePresenceRequest
+	34, // 64: fastmeow.v1.GatewayService.Shutdown:input_type -> fastmeow.v1.ShutdownRequest
+	7,  // 65: fastmeow.v1.GatewayService.Ping:output_type -> fastmeow.v1.PingResponse
+	10, // 66: fastmeow.v1.GatewayService.EnsureAccount:output_type -> fastmeow.v1.EnsureAccountResponse
+	12, // 67: fastmeow.v1.GatewayService.Connect:output_type -> fastmeow.v1.ConnectResponse
+	14, // 68: fastmeow.v1.GatewayService.Disconnect:output_type -> fastmeow.v1.DisconnectResponse
+	16, // 69: fastmeow.v1.GatewayService.Logout:output_type -> fastmeow.v1.LogoutResponse
+	19, // 70: fastmeow.v1.GatewayService.SendMessage:output_type -> fastmeow.v1.SendMessageResponse
+	21, // 71: fastmeow.v1.GatewayService.StreamEvents:output_type -> fastmeow.v1.StreamEventsResponse
+	37, // 72: fastmeow.v1.GatewayService.ListJoinedGroups:output_type -> fastmeow.v1.ListJoinedGroupsResponse
+	39, // 73: fastmeow.v1.GatewayService.GetGroupInfo:output_type -> fastmeow.v1.GetGroupInfoResponse
+	41, // 74: fastmeow.v1.GatewayService.PreviewGroupInvite:output_type -> fastmeow.v1.PreviewGroupInviteResponse
+	43, // 75: fastmeow.v1.GatewayService.JoinGroupViaInvite:output_type -> fastmeow.v1.JoinGroupViaInviteResponse
+	45, // 76: fastmeow.v1.GatewayService.LeaveGroup:output_type -> fastmeow.v1.LeaveGroupResponse
+	47, // 77: fastmeow.v1.GatewayService.CreateGroup:output_type -> fastmeow.v1.CreateGroupResponse
+	49, // 78: fastmeow.v1.GatewayService.UpdateGroupSettings:output_type -> fastmeow.v1.UpdateGroupSettingsResponse
+	51, // 79: fastmeow.v1.GatewayService.UpdateGroupParticipants:output_type -> fastmeow.v1.UpdateGroupParticipantsResponse
+	54, // 80: fastmeow.v1.GatewayService.GetGroupInviteLink:output_type -> fastmeow.v1.GetGroupInviteLinkResponse
+	56, // 81: fastmeow.v1.GatewayService.MarkRead:output_type -> fastmeow.v1.MarkReadResponse
+	58, // 82: fastmeow.v1.GatewayService.SendPresence:output_type -> fastmeow.v1.SendPresenceResponse
+	60, // 83: fastmeow.v1.GatewayService.SendChatPresence:output_type -> fastmeow.v1.SendChatPresenceResponse
+	62, // 84: fastmeow.v1.GatewayService.SubscribePresence:output_type -> fastmeow.v1.SubscribePresenceResponse
+	35, // 85: fastmeow.v1.GatewayService.Shutdown:output_type -> fastmeow.v1.ShutdownResponse
+	65, // [65:86] is the sub-list for method output_type
+	44, // [44:65] is the sub-list for method input_type
+	44, // [44:44] is the sub-list for extension type_name
+	44, // [44:44] is the sub-list for extension extendee
+	0,  // [0:44] is the sub-list for field type_name
 }
 
 func init() { file_fastmeow_v1_gateway_proto_init() }
@@ -3537,6 +4533,9 @@ func file_fastmeow_v1_gateway_proto_init() {
 		(*StreamEventsResponse_JoinedGroup)(nil),
 		(*StreamEventsResponse_GroupInfo)(nil),
 		(*StreamEventsResponse_GroupParticipantUpdate)(nil),
+		(*StreamEventsResponse_Receipt)(nil),
+		(*StreamEventsResponse_Presence)(nil),
+		(*StreamEventsResponse_ChatPresence)(nil),
 		(*StreamEventsResponse_Unknown)(nil),
 	}
 	type x struct{}
@@ -3544,8 +4543,8 @@ func file_fastmeow_v1_gateway_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_fastmeow_v1_gateway_proto_rawDesc), len(file_fastmeow_v1_gateway_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   49,
+			NumEnums:      6,
+			NumMessages:   60,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

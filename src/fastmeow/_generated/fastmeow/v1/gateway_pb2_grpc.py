@@ -121,6 +121,26 @@ class GatewayServiceStub(object):
                 request_serializer=fastmeow_dot_v1_dot_gateway__pb2.GetGroupInviteLinkRequest.SerializeToString,
                 response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.GetGroupInviteLinkResponse.FromString,
                 _registered_method=True)
+        self.MarkRead = channel.unary_unary(
+                '/fastmeow.v1.GatewayService/MarkRead',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.MarkReadRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.MarkReadResponse.FromString,
+                _registered_method=True)
+        self.SendPresence = channel.unary_unary(
+                '/fastmeow.v1.GatewayService/SendPresence',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.SendPresenceRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SendPresenceResponse.FromString,
+                _registered_method=True)
+        self.SendChatPresence = channel.unary_unary(
+                '/fastmeow.v1.GatewayService/SendChatPresence',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.SendChatPresenceRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SendChatPresenceResponse.FromString,
+                _registered_method=True)
+        self.SubscribePresence = channel.unary_unary(
+                '/fastmeow.v1.GatewayService/SubscribePresence',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceResponse.FromString,
+                _registered_method=True)
         self.Shutdown = channel.unary_unary(
                 '/fastmeow.v1.GatewayService/Shutdown',
                 request_serializer=fastmeow_dot_v1_dot_gateway__pb2.ShutdownRequest.SerializeToString,
@@ -283,6 +303,42 @@ class GatewayServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def MarkRead(self, request, context):
+        """───────────────────────────────────────────────────────────────────────────
+        Receipts & Presence (Phase 4.2)
+        ───────────────────────────────────────────────────────────────────────────
+
+        将一组消息标记为已读 / 已播放。对应 whatsmeow Client.MarkRead。
+        sender_jid 在 DM 中等于 chat_jid，在群聊中是真正发送者的 JID。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SendPresence(self, request, context):
+        """推送账号自身的全局在线状态（available / unavailable）。
+        对应 whatsmeow Client.SendPresence。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SendChatPresence(self, request, context):
+        """在指定会话内推送 typing / paused 等输入状态。
+        对应 whatsmeow Client.SendChatPresence。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SubscribePresence(self, request, context):
+        """订阅指定 JID 的在线状态推送（对方上线 / 下线 / 最近一次活跃时间）。
+        对应 whatsmeow Client.SubscribePresence。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def Shutdown(self, request, context):
         """请求优雅停机。sidecar 将：
         1. 停止接受新的 RPC。
@@ -376,6 +432,26 @@ def add_GatewayServiceServicer_to_server(servicer, server):
                     servicer.GetGroupInviteLink,
                     request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.GetGroupInviteLinkRequest.FromString,
                     response_serializer=fastmeow_dot_v1_dot_gateway__pb2.GetGroupInviteLinkResponse.SerializeToString,
+            ),
+            'MarkRead': grpc.unary_unary_rpc_method_handler(
+                    servicer.MarkRead,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.MarkReadRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.MarkReadResponse.SerializeToString,
+            ),
+            'SendPresence': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendPresence,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SendPresenceRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.SendPresenceResponse.SerializeToString,
+            ),
+            'SendChatPresence': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendChatPresence,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SendChatPresenceRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.SendChatPresenceResponse.SerializeToString,
+            ),
+            'SubscribePresence': grpc.unary_unary_rpc_method_handler(
+                    servicer.SubscribePresence,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceResponse.SerializeToString,
             ),
             'Shutdown': grpc.unary_unary_rpc_method_handler(
                     servicer.Shutdown,
@@ -822,6 +898,114 @@ class GatewayService(object):
             '/fastmeow.v1.GatewayService/GetGroupInviteLink',
             fastmeow_dot_v1_dot_gateway__pb2.GetGroupInviteLinkRequest.SerializeToString,
             fastmeow_dot_v1_dot_gateway__pb2.GetGroupInviteLinkResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def MarkRead(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/MarkRead',
+            fastmeow_dot_v1_dot_gateway__pb2.MarkReadRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.MarkReadResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SendPresence(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/SendPresence',
+            fastmeow_dot_v1_dot_gateway__pb2.SendPresenceRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.SendPresenceResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SendChatPresence(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/SendChatPresence',
+            fastmeow_dot_v1_dot_gateway__pb2.SendChatPresenceRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.SendChatPresenceResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SubscribePresence(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/SubscribePresence',
+            fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceResponse.FromString,
             options,
             channel_credentials,
             insecure,

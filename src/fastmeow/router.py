@@ -49,6 +49,7 @@ from fastmeow.exceptions import HandlerSignatureError
 from fastmeow.filters import F as _F  # noqa: F401 — re-exported for type narrowing
 from fastmeow.filters import Filter, FilterResult, _Magic
 from fastmeow.types import (
+    ChatPresenceEvent,
     ConnectedEvent,
     DisconnectedEvent,
     Event,
@@ -58,7 +59,9 @@ from fastmeow.types import (
     LoggedOutEvent,
     MessageEvent,
     PairSuccessEvent,
+    PresenceEvent,
     QREvent,
+    ReceiptEvent,
     UnknownEvent,
 )
 
@@ -144,7 +147,17 @@ class Router:
         JoinedGroupEvent,
         GroupInfoEvent,
         GroupParticipantUpdateEvent,
+        ReceiptEvent,
+        PresenceEvent,
+        ChatPresenceEvent,
         UnknownEvent,
+    )
+
+    # "Soft" 事件默认不通过 sidecar 的事件流推送；只有当至少一个
+    # 处理器被注册时，派发器才会以 ``include_soft_events=True`` 订阅。
+    # 该集合用于 :meth:`has_soft_event_handlers` 自省（参见 _dispatcher）。
+    _SOFT_EVENTS: frozenset[type[Event]] = frozenset(
+        {ReceiptEvent, PresenceEvent, ChatPresenceEvent}
     )
 
     def __init__(self, *, name: str | None = None) -> None:
@@ -219,6 +232,29 @@ class Router:
         """为 :class:`GroupParticipantUpdateEvent` 注册处理器（群成员变更）。"""
         return self._make_decorator(GroupParticipantUpdateEvent, filters)
 
+    def on_receipt(self, *filters: Filter) -> Callable[[HandlerFn], HandlerFn]:
+        """为 :class:`ReceiptEvent` 注册处理器（消息送达 / 已读 / 已播放回执）。
+
+        这是一个 "soft" 事件：仅当存在已注册的处理器时，派发器才会以
+        ``include_soft_events=True`` 订阅 sidecar 流（见 :class:`_dispatcher`）。
+        """
+        return self._make_decorator(ReceiptEvent, filters)
+
+    def on_presence(self, *filters: Filter) -> Callable[[HandlerFn], HandlerFn]:
+        """为 :class:`PresenceEvent` 注册处理器（联系人在线 / 最后一次在线时间）。
+
+        必须先调用 :meth:`fastmeow.AccountClient.subscribe_presence` 订阅目标
+        JID，sidecar 才会推送事件。Soft event：见 :meth:`on_receipt`。
+        """
+        return self._make_decorator(PresenceEvent, filters)
+
+    def on_chat_presence(self, *filters: Filter) -> Callable[[HandlerFn], HandlerFn]:
+        """为 :class:`ChatPresenceEvent` 注册处理器（"对方正在输入"等会话级状态）。
+
+        Soft event：见 :meth:`on_receipt`。
+        """
+        return self._make_decorator(ChatPresenceEvent, filters)
+
     def unknown(self, *filters: Filter) -> Callable[[HandlerFn], HandlerFn]:
         """为未识别的事件注册兜底处理器。"""
         return self._make_decorator(UnknownEvent, filters)
@@ -273,6 +309,19 @@ class Router:
         for sub in self._sub_routers:
             out.extend(sub._collect_for(cls))
         return out
+
+    def has_soft_event_handlers(self) -> bool:
+        """是否存在任何 soft-event 处理器（receipts / presence / chat_presence）。
+
+        派发器在订阅 sidecar 事件流前调用此方法以决定是否设置
+        ``include_soft_events=True``。结果递归覆盖所有子路由器，因此
+        在挂载 (include_router) 完成后调用一次即可。
+        """
+        for cls in self._SOFT_EVENTS:
+            handler_set = self._sets.get(cls)
+            if handler_set is not None and handler_set.items:
+                return True
+        return any(sub.has_soft_event_handlers() for sub in self._sub_routers)
 
     def __repr__(self) -> str:
         counts = ", ".join(

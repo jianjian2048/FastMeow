@@ -10,6 +10,46 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class ReceiptType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    RECEIPT_TYPE_UNSPECIFIED: _ClassVar[ReceiptType]
+    RECEIPT_TYPE_DELIVERED: _ClassVar[ReceiptType]
+    RECEIPT_TYPE_READ: _ClassVar[ReceiptType]
+    RECEIPT_TYPE_PLAYED: _ClassVar[ReceiptType]
+    RECEIPT_TYPE_SERVER: _ClassVar[ReceiptType]
+
+class PresenceType(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    PRESENCE_TYPE_UNSPECIFIED: _ClassVar[PresenceType]
+    PRESENCE_TYPE_AVAILABLE: _ClassVar[PresenceType]
+    PRESENCE_TYPE_UNAVAILABLE: _ClassVar[PresenceType]
+
+class ChatPresenceState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    CHAT_PRESENCE_STATE_UNSPECIFIED: _ClassVar[ChatPresenceState]
+    CHAT_PRESENCE_STATE_COMPOSING: _ClassVar[ChatPresenceState]
+    CHAT_PRESENCE_STATE_PAUSED: _ClassVar[ChatPresenceState]
+
+class ChatPresenceMedia(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    CHAT_PRESENCE_MEDIA_UNSPECIFIED: _ClassVar[ChatPresenceMedia]
+    CHAT_PRESENCE_MEDIA_TEXT: _ClassVar[ChatPresenceMedia]
+    CHAT_PRESENCE_MEDIA_AUDIO: _ClassVar[ChatPresenceMedia]
+RECEIPT_TYPE_UNSPECIFIED: ReceiptType
+RECEIPT_TYPE_DELIVERED: ReceiptType
+RECEIPT_TYPE_READ: ReceiptType
+RECEIPT_TYPE_PLAYED: ReceiptType
+RECEIPT_TYPE_SERVER: ReceiptType
+PRESENCE_TYPE_UNSPECIFIED: PresenceType
+PRESENCE_TYPE_AVAILABLE: PresenceType
+PRESENCE_TYPE_UNAVAILABLE: PresenceType
+CHAT_PRESENCE_STATE_UNSPECIFIED: ChatPresenceState
+CHAT_PRESENCE_STATE_COMPOSING: ChatPresenceState
+CHAT_PRESENCE_STATE_PAUSED: ChatPresenceState
+CHAT_PRESENCE_MEDIA_UNSPECIFIED: ChatPresenceMedia
+CHAT_PRESENCE_MEDIA_TEXT: ChatPresenceMedia
+CHAT_PRESENCE_MEDIA_AUDIO: ChatPresenceMedia
+
 class PingRequest(_message.Message):
     __slots__ = ("client_protocol_version",)
     CLIENT_PROTOCOL_VERSION_FIELD_NUMBER: _ClassVar[int]
@@ -151,7 +191,7 @@ class StreamEventsRequest(_message.Message):
     def __init__(self, include_soft_events: bool = ..., resume_after_seq: _Optional[int] = ...) -> None: ...
 
 class StreamEventsResponse(_message.Message):
-    __slots__ = ("seq", "sidecar_id", "account_key", "account_jid", "observed_at", "connected", "disconnected", "qr", "pair_success", "message", "logged_out", "joined_group", "group_info", "group_participant_update", "unknown")
+    __slots__ = ("seq", "sidecar_id", "account_key", "account_jid", "observed_at", "connected", "disconnected", "qr", "pair_success", "message", "logged_out", "joined_group", "group_info", "group_participant_update", "receipt", "presence", "chat_presence", "unknown")
     SEQ_FIELD_NUMBER: _ClassVar[int]
     SIDECAR_ID_FIELD_NUMBER: _ClassVar[int]
     ACCOUNT_KEY_FIELD_NUMBER: _ClassVar[int]
@@ -166,6 +206,9 @@ class StreamEventsResponse(_message.Message):
     JOINED_GROUP_FIELD_NUMBER: _ClassVar[int]
     GROUP_INFO_FIELD_NUMBER: _ClassVar[int]
     GROUP_PARTICIPANT_UPDATE_FIELD_NUMBER: _ClassVar[int]
+    RECEIPT_FIELD_NUMBER: _ClassVar[int]
+    PRESENCE_FIELD_NUMBER: _ClassVar[int]
+    CHAT_PRESENCE_FIELD_NUMBER: _ClassVar[int]
     UNKNOWN_FIELD_NUMBER: _ClassVar[int]
     seq: int
     sidecar_id: str
@@ -181,8 +224,11 @@ class StreamEventsResponse(_message.Message):
     joined_group: JoinedGroupEvent
     group_info: GroupInfoEvent
     group_participant_update: GroupParticipantUpdateEvent
+    receipt: ReceiptEvent
+    presence: PresenceEvent
+    chat_presence: ChatPresenceEvent
     unknown: UnknownEvent
-    def __init__(self, seq: _Optional[int] = ..., sidecar_id: _Optional[str] = ..., account_key: _Optional[str] = ..., account_jid: _Optional[str] = ..., observed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., connected: _Optional[_Union[ConnectedEvent, _Mapping]] = ..., disconnected: _Optional[_Union[DisconnectedEvent, _Mapping]] = ..., qr: _Optional[_Union[QREvent, _Mapping]] = ..., pair_success: _Optional[_Union[PairSuccessEvent, _Mapping]] = ..., message: _Optional[_Union[MessageEvent, _Mapping]] = ..., logged_out: _Optional[_Union[LoggedOutEvent, _Mapping]] = ..., joined_group: _Optional[_Union[JoinedGroupEvent, _Mapping]] = ..., group_info: _Optional[_Union[GroupInfoEvent, _Mapping]] = ..., group_participant_update: _Optional[_Union[GroupParticipantUpdateEvent, _Mapping]] = ..., unknown: _Optional[_Union[UnknownEvent, _Mapping]] = ...) -> None: ...
+    def __init__(self, seq: _Optional[int] = ..., sidecar_id: _Optional[str] = ..., account_key: _Optional[str] = ..., account_jid: _Optional[str] = ..., observed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., connected: _Optional[_Union[ConnectedEvent, _Mapping]] = ..., disconnected: _Optional[_Union[DisconnectedEvent, _Mapping]] = ..., qr: _Optional[_Union[QREvent, _Mapping]] = ..., pair_success: _Optional[_Union[PairSuccessEvent, _Mapping]] = ..., message: _Optional[_Union[MessageEvent, _Mapping]] = ..., logged_out: _Optional[_Union[LoggedOutEvent, _Mapping]] = ..., joined_group: _Optional[_Union[JoinedGroupEvent, _Mapping]] = ..., group_info: _Optional[_Union[GroupInfoEvent, _Mapping]] = ..., group_participant_update: _Optional[_Union[GroupParticipantUpdateEvent, _Mapping]] = ..., receipt: _Optional[_Union[ReceiptEvent, _Mapping]] = ..., presence: _Optional[_Union[PresenceEvent, _Mapping]] = ..., chat_presence: _Optional[_Union[ChatPresenceEvent, _Mapping]] = ..., unknown: _Optional[_Union[UnknownEvent, _Mapping]] = ...) -> None: ...
 
 class ConnectedEvent(_message.Message):
     __slots__ = ()
@@ -485,3 +531,99 @@ class GetGroupInviteLinkResponse(_message.Message):
     INVITE_LINK_FIELD_NUMBER: _ClassVar[int]
     invite_link: str
     def __init__(self, invite_link: _Optional[str] = ...) -> None: ...
+
+class MarkReadRequest(_message.Message):
+    __slots__ = ("account_key", "message_ids", "chat_jid", "sender_jid", "read_at", "receipt_type")
+    ACCOUNT_KEY_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_IDS_FIELD_NUMBER: _ClassVar[int]
+    CHAT_JID_FIELD_NUMBER: _ClassVar[int]
+    SENDER_JID_FIELD_NUMBER: _ClassVar[int]
+    READ_AT_FIELD_NUMBER: _ClassVar[int]
+    RECEIPT_TYPE_FIELD_NUMBER: _ClassVar[int]
+    account_key: str
+    message_ids: _containers.RepeatedScalarFieldContainer[str]
+    chat_jid: str
+    sender_jid: str
+    read_at: _timestamp_pb2.Timestamp
+    receipt_type: ReceiptType
+    def __init__(self, account_key: _Optional[str] = ..., message_ids: _Optional[_Iterable[str]] = ..., chat_jid: _Optional[str] = ..., sender_jid: _Optional[str] = ..., read_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., receipt_type: _Optional[_Union[ReceiptType, str]] = ...) -> None: ...
+
+class MarkReadResponse(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class SendPresenceRequest(_message.Message):
+    __slots__ = ("account_key", "presence")
+    ACCOUNT_KEY_FIELD_NUMBER: _ClassVar[int]
+    PRESENCE_FIELD_NUMBER: _ClassVar[int]
+    account_key: str
+    presence: PresenceType
+    def __init__(self, account_key: _Optional[str] = ..., presence: _Optional[_Union[PresenceType, str]] = ...) -> None: ...
+
+class SendPresenceResponse(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class SendChatPresenceRequest(_message.Message):
+    __slots__ = ("account_key", "chat_jid", "state", "media")
+    ACCOUNT_KEY_FIELD_NUMBER: _ClassVar[int]
+    CHAT_JID_FIELD_NUMBER: _ClassVar[int]
+    STATE_FIELD_NUMBER: _ClassVar[int]
+    MEDIA_FIELD_NUMBER: _ClassVar[int]
+    account_key: str
+    chat_jid: str
+    state: ChatPresenceState
+    media: ChatPresenceMedia
+    def __init__(self, account_key: _Optional[str] = ..., chat_jid: _Optional[str] = ..., state: _Optional[_Union[ChatPresenceState, str]] = ..., media: _Optional[_Union[ChatPresenceMedia, str]] = ...) -> None: ...
+
+class SendChatPresenceResponse(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class SubscribePresenceRequest(_message.Message):
+    __slots__ = ("account_key", "jid")
+    ACCOUNT_KEY_FIELD_NUMBER: _ClassVar[int]
+    JID_FIELD_NUMBER: _ClassVar[int]
+    account_key: str
+    jid: str
+    def __init__(self, account_key: _Optional[str] = ..., jid: _Optional[str] = ...) -> None: ...
+
+class SubscribePresenceResponse(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class ReceiptEvent(_message.Message):
+    __slots__ = ("message_ids", "chat_jid", "sender_jid", "timestamp", "receipt_type")
+    MESSAGE_IDS_FIELD_NUMBER: _ClassVar[int]
+    CHAT_JID_FIELD_NUMBER: _ClassVar[int]
+    SENDER_JID_FIELD_NUMBER: _ClassVar[int]
+    TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
+    RECEIPT_TYPE_FIELD_NUMBER: _ClassVar[int]
+    message_ids: _containers.RepeatedScalarFieldContainer[str]
+    chat_jid: str
+    sender_jid: str
+    timestamp: _timestamp_pb2.Timestamp
+    receipt_type: ReceiptType
+    def __init__(self, message_ids: _Optional[_Iterable[str]] = ..., chat_jid: _Optional[str] = ..., sender_jid: _Optional[str] = ..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., receipt_type: _Optional[_Union[ReceiptType, str]] = ...) -> None: ...
+
+class PresenceEvent(_message.Message):
+    __slots__ = ("from_jid", "unavailable", "last_seen")
+    FROM_JID_FIELD_NUMBER: _ClassVar[int]
+    UNAVAILABLE_FIELD_NUMBER: _ClassVar[int]
+    LAST_SEEN_FIELD_NUMBER: _ClassVar[int]
+    from_jid: str
+    unavailable: bool
+    last_seen: _timestamp_pb2.Timestamp
+    def __init__(self, from_jid: _Optional[str] = ..., unavailable: bool = ..., last_seen: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+
+class ChatPresenceEvent(_message.Message):
+    __slots__ = ("chat_jid", "sender_jid", "state", "media")
+    CHAT_JID_FIELD_NUMBER: _ClassVar[int]
+    SENDER_JID_FIELD_NUMBER: _ClassVar[int]
+    STATE_FIELD_NUMBER: _ClassVar[int]
+    MEDIA_FIELD_NUMBER: _ClassVar[int]
+    chat_jid: str
+    sender_jid: str
+    state: ChatPresenceState
+    media: ChatPresenceMedia
+    def __init__(self, chat_jid: _Optional[str] = ..., sender_jid: _Optional[str] = ..., state: _Optional[_Union[ChatPresenceState, str]] = ..., media: _Optional[_Union[ChatPresenceMedia, str]] = ...) -> None: ...

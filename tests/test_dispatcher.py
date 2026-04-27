@@ -52,7 +52,9 @@ class FakeTransport:
     async def end_stream(self) -> None:
         await self._queue.put(None)
 
-    async def stream_events(self) -> AsyncIterator[Event]:
+    async def stream_events(
+        self, *, include_soft_events: bool = False
+    ) -> AsyncIterator[Event]:
         self.streaming.set()
         while True:
             item = await self._queue.get()

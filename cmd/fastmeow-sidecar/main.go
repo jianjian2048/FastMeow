@@ -40,6 +40,8 @@ import (
 	"github.com/jianjian2048/fastmeow/internal/events"
 	"github.com/jianjian2048/fastmeow/internal/groups"
 	"github.com/jianjian2048/fastmeow/internal/messages"
+	"github.com/jianjian2048/fastmeow/internal/presence"
+	"github.com/jianjian2048/fastmeow/internal/receipts"
 	"github.com/jianjian2048/fastmeow/internal/sessions"
 )
 
@@ -109,6 +111,8 @@ func main() {
 		os.Exit(1)
 	}
 	groupsHandler := groups.NewHandler()
+	receiptsHandler := receipts.NewHandler()
+	presenceHandler := presence.NewHandler()
 
 	lis, cleanup, err := newListener(*listenSpec)
 	if err != nil {
@@ -127,7 +131,7 @@ func main() {
 		grpc.MaxSendMsgSize(16*1024*1024),
 	)
 
-	gw := newGateway(*sidecarID, store, registry, bus, sender, groupsHandler, rootLog.Sub("gw"))
+	gw := newGateway(*sidecarID, store, registry, bus, sender, groupsHandler, receiptsHandler, presenceHandler, rootLog.Sub("gw"))
 	pb.RegisterGatewayServiceServer(srv, gw)
 
 	// 协同关闭：
@@ -214,6 +218,8 @@ type gateway struct {
 	bus        *events.Bus
 	sender     *messages.Sender
 	groups     *groups.Handler
+	receipts   *receipts.Handler
+	presence   *presence.Handler
 	log        waLog.Logger
 	shutdownCh chan struct{}
 	shutdownMu sync.Mutex
@@ -226,6 +232,8 @@ func newGateway(
 	bus *events.Bus,
 	sender *messages.Sender,
 	groupsHandler *groups.Handler,
+	receiptsHandler *receipts.Handler,
+	presenceHandler *presence.Handler,
 	log waLog.Logger,
 ) *gateway {
 	return &gateway{
@@ -235,6 +243,8 @@ func newGateway(
 		bus:        bus,
 		sender:     sender,
 		groups:     groupsHandler,
+		receipts:   receiptsHandler,
+		presence:   presenceHandler,
 		log:        log,
 		shutdownCh: make(chan struct{}),
 	}
@@ -454,6 +464,11 @@ func (g *gateway) StreamEvents(req *pb.StreamEventsRequest, stream pb.GatewaySer
 	ch := g.bus.Subscribe()
 	ctx := stream.Context()
 
+	// Phase 4.2：软状态事件（Receipt / Presence / ChatPresence）默认关闭，
+	// 仅在调用方显式请求 include_soft_events=true 时透传。Bus 始终翻译它们，
+	// 过滤在此处发生 —— 让 Bus 保持纯粹、把订阅者能力声明隔离在边缘。
+	includeSoft := req.GetIncludeSoftEvents()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -463,10 +478,27 @@ func (g *gateway) StreamEvents(req *pb.StreamEventsRequest, stream pb.GatewaySer
 				// 总线在关闭期间关闭；清洁的 EOF。
 				return nil
 			}
+			if !includeSoft && isSoftEvent(evt) {
+				continue
+			}
 			if err := stream.Send(evt); err != nil {
 				return err
 			}
 		}
+	}
+}
+
+// isSoftEvent 判断 wire 事件是否属于「软状态」类别：
+// Receipt / Presence / ChatPresence。这些事件高频且对多数业务无关，
+// 因此 Phase 4.2 决策为默认不递送，需调用方显式 opt-in。
+func isSoftEvent(evt *pb.StreamEventsResponse) bool {
+	switch evt.GetEvent().(type) {
+	case *pb.StreamEventsResponse_Receipt,
+		*pb.StreamEventsResponse_Presence,
+		*pb.StreamEventsResponse_ChatPresence:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -654,6 +686,104 @@ func groupErrToStatus(err error) error {
 	case errors.Is(err, whatsmeow.ErrNotInGroup),
 		errors.Is(err, whatsmeow.ErrGroupInviteLinkUnauthorized):
 		return status.Errorf(codes.PermissionDenied, "%v", err)
+	default:
+		return status.Errorf(codes.Unavailable, "%v", err)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 回执 / 在线状态 RPC（Phase 4.2）
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// 4 个 RPC 共享 clientFor 的两步骤前缀（解析 account_key + 取 client），
+// 之后委派给 internal/receipts.Handler 或 internal/presence.Handler。
+// 错误统一通过 receiptErrToStatus / presenceErrToStatus 映射，
+// 与群组 RPC 同模式。
+
+func (g *gateway) MarkRead(ctx context.Context, req *pb.MarkReadRequest) (*pb.MarkReadResponse, error) {
+	defer recoverPanic("MarkRead")
+	cli, err := g.clientFor(req.GetAccountKey())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := g.receipts.MarkRead(ctx, cli, req)
+	if err != nil {
+		return nil, receiptErrToStatus(err)
+	}
+	return resp, nil
+}
+
+func (g *gateway) SendPresence(ctx context.Context, req *pb.SendPresenceRequest) (*pb.SendPresenceResponse, error) {
+	defer recoverPanic("SendPresence")
+	cli, err := g.clientFor(req.GetAccountKey())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := g.presence.SendPresence(ctx, cli, req)
+	if err != nil {
+		return nil, presenceErrToStatus(err)
+	}
+	return resp, nil
+}
+
+func (g *gateway) SendChatPresence(ctx context.Context, req *pb.SendChatPresenceRequest) (*pb.SendChatPresenceResponse, error) {
+	defer recoverPanic("SendChatPresence")
+	cli, err := g.clientFor(req.GetAccountKey())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := g.presence.SendChatPresence(ctx, cli, req)
+	if err != nil {
+		return nil, presenceErrToStatus(err)
+	}
+	return resp, nil
+}
+
+func (g *gateway) SubscribePresence(ctx context.Context, req *pb.SubscribePresenceRequest) (*pb.SubscribePresenceResponse, error) {
+	defer recoverPanic("SubscribePresence")
+	cli, err := g.clientFor(req.GetAccountKey())
+	if err != nil {
+		return nil, err
+	}
+	resp, err := g.presence.SubscribePresence(ctx, cli, req)
+	if err != nil {
+		return nil, presenceErrToStatus(err)
+	}
+	return resp, nil
+}
+
+// receiptErrToStatus 把 internal/receipts 的 sentinel + whatsmeow 错误
+// 映射到 gRPC code。
+//
+// 映射规则：
+//   - receipts.ErrInvalidJID / ErrEmptyMessageIDs / ErrEmptyMessageID
+//                                                   → INVALID_ARGUMENT
+//   - 其他                                            → UNAVAILABLE（多数为
+//     网络 / WebSocket 临时错误；客户端可安全重试）
+func receiptErrToStatus(err error) error {
+	switch {
+	case errors.Is(err, receipts.ErrInvalidJID),
+		errors.Is(err, receipts.ErrEmptyMessageIDs),
+		errors.Is(err, receipts.ErrEmptyMessageID):
+		return status.Errorf(codes.InvalidArgument, "%v", err)
+	default:
+		return status.Errorf(codes.Unavailable, "%v", err)
+	}
+}
+
+// presenceErrToStatus 把 internal/presence 的 sentinel + whatsmeow 错误
+// 映射到 gRPC code。
+//
+// 映射规则：
+//   - presence.ErrInvalidJID / ErrInvalidPresenceType /
+//     ErrInvalidChatPresenceState                    → INVALID_ARGUMENT
+//   - 其他                                            → UNAVAILABLE
+func presenceErrToStatus(err error) error {
+	switch {
+	case errors.Is(err, presence.ErrInvalidJID),
+		errors.Is(err, presence.ErrInvalidPresenceType),
+		errors.Is(err, presence.ErrInvalidChatPresenceState):
+		return status.Errorf(codes.InvalidArgument, "%v", err)
 	default:
 		return status.Errorf(codes.Unavailable, "%v", err)
 	}
