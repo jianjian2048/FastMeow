@@ -1,25 +1,23 @@
-"""End-to-end smoke: real WhatsApp account through the FastMeow Python API.
+"""端到端 smoke：通过 FastMeow Python API 操作真实 WhatsApp 账号。
 
-Spawns the real Go sidecar, opens a real gRPC channel, registers an
-account, drives QR pairing on first run (or reattaches an existing
-session on subsequent runs), and listens for one inbound message.
+会启动真实的 Go sidecar、打开真实的 gRPC 通道、注册账号、在首次运行时
+执行 QR 配对（或在后续运行中重新挂载已有会话），并监听一条入站消息。
 
-Run manually (requires interactive terminal for QR scan + a phone):
+手动运行（需要可交互终端用于扫码 + 一部手机）：
 
     .\\.venv\\Scripts\\python.exe -m tests._smoke_e2e
 
-Behavior:
-    * First run: prints a QR code on stderr (terminal renderer). Scan
-      from WhatsApp -> Linked Devices on your phone.
-    * Reattach run: skips QR; goes straight to CONNECTED using the
-      existing sqlite session in ``./e2e-smoke-sessions/``.
-    * Once connected, prints every incoming MessageEvent and replies
-      ``echo: <text>`` to text DMs. Stops after one reply or 120s
-      timeout, whichever comes first.
+行为：
+    * 首次运行：在 stderr 打印 QR 码（终端渲染器）。请在手机上的
+      WhatsApp -> Linked Devices 中扫码。
+    * 重新挂载运行：跳过 QR；直接使用 ``./e2e-smoke-sessions/``
+      中现有的 sqlite 会话进入 CONNECTED。
+    * 一旦连接成功，打印每条收到的 MessageEvent，并对文本私聊回复
+      ``echo: <text>``。在一次回复后或 120s 超时后停止，以先到者为准。
 
-Cleanup:
-    Sessions live under ``D:\\Srcs\\FastMeow\\e2e-smoke-sessions\\``.
-    Delete the directory to force a fresh QR pairing next run.
+清理：
+    会话保存在 ``D:\\Srcs\\FastMeow\\e2e-smoke-sessions\\`` 下。
+    删除该目录即可在下次运行时强制重新扫码配对。
 """
 
 from __future__ import annotations

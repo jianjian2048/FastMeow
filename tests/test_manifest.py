@@ -1,4 +1,4 @@
-"""Tests for the on-disk Manifest registry."""
+"""用于磁盘上的 Manifest 注册表的测试。"""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def session_dir(tmp_path: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# Lifecycle
+# 生命周期
 # ---------------------------------------------------------------------------
 
 
@@ -65,7 +65,7 @@ async def test_reopen_loads_previous_state(session_dir: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Update / drift
+# 更新／漂移
 # ---------------------------------------------------------------------------
 
 
@@ -111,8 +111,8 @@ async def test_register_clobber_protection(session_dir: Path) -> None:
 
 
 async def test_register_upgrade_blank_to_real(session_dir: Path) -> None:
-    """Re-registering an empty-JID entry with a real JID is allowed
-    (this is the post-pair flow)."""
+    """允许将空 JID 条目重新注册为真实 JID。
+    （这是配对后的流程。）"""
     m = await Manifest.open(session_dir)
     try:
         await m.register("alice")  # jid=""
@@ -127,19 +127,19 @@ async def test_remove_idempotent(session_dir: Path) -> None:
     try:
         await m.register("alice")
         await m.remove("alice")
-        await m.remove("alice")  # double-remove is a no-op + warning
+        await m.remove("alice")  # 重复移除是无操作＋警告
         assert "alice" not in m
     finally:
         await m.close()
 
 
 # ---------------------------------------------------------------------------
-# Concurrency
+# 并发
 # ---------------------------------------------------------------------------
 
 
 async def test_concurrent_registers_are_serialised(session_dir: Path) -> None:
-    """Lots of concurrent register() calls must all land safely."""
+    """大量并发的 register() 调用必须都能安全落地。"""
     m = await Manifest.open(session_dir)
     try:
         await asyncio.gather(*[m.register(f"u{i}") for i in range(50)])
@@ -150,7 +150,7 @@ async def test_concurrent_registers_are_serialised(session_dir: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Cross-process lock
+# 跨进程锁
 # ---------------------------------------------------------------------------
 
 
@@ -162,13 +162,13 @@ async def test_second_open_on_same_dir_fails(session_dir: Path) -> None:
     finally:
         await m1.close()
 
-    # After closing the first, a fresh open should succeed.
+    # 关闭第一个之后，新的打开应当成功。
     m2 = await Manifest.open(session_dir)
     await m2.close()
 
 
 # ---------------------------------------------------------------------------
-# Corruption handling
+# 损坏处理
 # ---------------------------------------------------------------------------
 
 

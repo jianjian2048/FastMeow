@@ -1,21 +1,20 @@
-"""Run multiple WhatsApp accounts under one FastMeow app.
+"""在一个 FastMeow 应用下运行多个 WhatsApp 账户。
 
-Run from the repo root::
+从仓库根目录运行::
 
     python examples/multi_account.py
 
-What this demonstrates:
-    * One :class:`FastMeow` instance hosting several accounts.
-    * A single :class:`Router` whose handlers run for *every* account;
-      ``ctx.account_key`` distinguishes them at dispatch time.
-    * Pairing all accounts in parallel via :func:`asyncio.gather`.
-    * Routing inbound messages back through the *same* account that
-      received them (the ctx is account-scoped, so ``ctx.reply`` and
-      ``ctx.send`` always use the right identity).
+这演示了：
+    * 一个 :class:`FastMeow` 实例承载多个账户。
+    * 一个统一的 :class:`Router`，其处理器会为 *每个* 账户运行；
+      ``ctx.account_key`` 会在分发时区分它们。
+    * 通过 :func:`asyncio.gather` 并行完成所有账户的配对。
+    * 将入站消息通过接收它们的 *同一个* 账户路由回去（ctx 具有账户作用域，因此 ``ctx.reply`` 和
+      ``ctx.send`` 始终使用正确的身份）。
 
-Each account uses its own session subdirectory under
-``./sessions/<account_key>/``. On first run you'll be asked to scan a
-QR code per account; subsequent runs auto-reconnect.
+每个账户都使用自己位于
+``./sessions/<account_key>/`` 下的会话子目录。首次运行时，你会被要求为每个账户扫描一个二维码；
+后续运行会自动重连。
 """
 
 from __future__ import annotations
@@ -47,17 +46,16 @@ router = Router(name="multi")
 
 @router.connected()
 async def on_connected(event: ConnectedEvent, ctx: Ctx) -> None:
-    """Fires once per account whenever it (re)connects."""
+    """每当账户（重新）连接时，每个账户触发一次。"""
     print(f"[{ctx.account_key}] online as {ctx.account_jid}")
 
 
 @router.message((F.text == "whoami") & ~F.from_me)
 async def whoami(msg: MessageEvent, ctx: Ctx) -> None:
-    """Reply with the account that handled this message.
+    """回复处理了这条消息的账户。
 
-    Both ``alice`` and ``bob`` share this handler, but ``ctx`` is
-    rebuilt per event, so each reply correctly identifies the
-    account that received the inbound message.
+    ``alice`` 和 ``bob`` 都共享这个处理器，但 ``ctx`` 会按事件重建，
+    因此每次回复都能正确标识接收入站消息的账户。
     """
     await ctx.reply(f"you reached '{ctx.account_key}' ({ctx.account_jid})")
 
@@ -66,8 +64,7 @@ async def whoami(msg: MessageEvent, ctx: Ctx) -> None:
 async def echo(msg: MessageEvent, ctx: Ctx) -> None:
     if not msg.text:
         return
-    # Tag the echo with the account_key so it's obvious which identity
-    # answered when you have several connected at once.
+    # 给回声加上 account_key 标签，这样当你同时连接多个身份时，就能明显看出是哪个身份作出的回应。
     await ctx.reply(f"[{ctx.account_key}] echo: {msg.text}")
 
 
@@ -78,10 +75,8 @@ async def main() -> None:
     async with FastMeow(session_dir=session_dir) as app:
         app.include_router(router)
 
-        # add_account is sync-return / async-complete: the call returns
-        # immediately with an AccountHandle, but the connection is
-        # established in the background. ``handle.ready()`` is what
-        # actually awaits CONNECTED state.
+        # add_account 是同步返回 / 异步完成的：调用会立即返回一个 AccountHandle，
+        # 但连接会在后台建立。``handle.ready()`` 才是真正等待 CONNECTED 状态的地方。
         handles = [
             app.add_account(key, on_qr="terminal") for key in ACCOUNT_KEYS
         ]

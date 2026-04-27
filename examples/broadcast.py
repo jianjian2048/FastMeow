@@ -1,28 +1,27 @@
-"""Broadcast a message to a list of JIDs.
+"""向一个 JID 列表广播消息。
 
-Run from the repo root::
+从仓库根目录运行::
 
     # 1. edit RECIPIENTS below to real JIDs you control
     # 2. run it
     python examples/broadcast.py
 
-What this demonstrates:
-    * Sending one-to-many *without* WhatsApp's broadcast-list feature
-      (which has caveats) -- just a plain async fan-out of ``send_text``.
-    * Triggering work from ``@router.connected()`` so we send only after
-      the account is fully online.
-    * Using ``ctx.send(jid, text)`` (not ``ctx.reply``) since there is
-      no inbound message to reply to.
-    * Reading :class:`SendResult` to surface the WhatsApp-issued
-      ``message_id`` and the sidecar's idempotency ``deduped`` flag.
-    * Bounded concurrency via :class:`asyncio.Semaphore` -- WhatsApp
-      will rate-limit (and possibly ban) accounts that fan out too
-      aggressively. Tune ``MAX_CONCURRENT`` and ``DELAY_SECONDS`` for
-      your account's standing.
-    * Exiting cleanly after the broadcast completes (no run_forever).
+这演示了：
+    * 在不使用 WhatsApp 广播列表功能的情况下进行一对多发送
+      （该功能有一些注意事项）——只是对 ``send_text`` 的普通异步扇出。
+    * 通过 ``@router.connected()`` 触发工作，因此只在
+      账户完全在线后发送。
+    * 使用 ``ctx.send(jid, text)``（而不是 ``ctx.reply``），因为
+      没有可回复的入站消息。
+    * 读取 :class:`SendResult` 以暴露 WhatsApp 返回的
+      ``message_id`` 和 sidecar 的幂等 ``deduped`` 标志。
+    * 通过 :class:`asyncio.Semaphore` 进行有界并发——WhatsApp
+      会对过于激进的扇出进行限流（并可能封号）。请根据
+      你的账户状况调整 ``MAX_CONCURRENT`` 和 ``DELAY_SECONDS``。
+    * 广播完成后干净退出（不需要 run_forever）。
 
-JID format reminder: ``<phone-without-plus>@s.whatsapp.net`` for users
-(e.g. ``14155551234@s.whatsapp.net``) or ``<id>@g.us`` for groups.
+JID 格式提示：用户使用 ``<不含加号的手机号>@s.whatsapp.net``
+（例如 ``14155551234@s.whatsapp.net``），群组则使用 ``<id>@g.us``。
 """
 
 from __future__ import annotations
@@ -46,9 +45,9 @@ logging.basicConfig(
 )
 
 
-# --- Config ---------------------------------------------------------------
+# --- 配置 ---------------------------------------------------------------
 
-# Replace with real JIDs you own / have consent to message.
+# 替换为你拥有的、并且有权联系的真实 JID。
 RECIPIENTS: list[str] = [
     "14155551234@s.whatsapp.net",
     "14155555678@s.whatsapp.net",
@@ -56,11 +55,11 @@ RECIPIENTS: list[str] = [
 
 BROADCAST_TEXT = "Hello from FastMeow! (broadcast example)"
 
-# Conservative defaults to stay polite to WhatsApp's rate limits.
+# 保守默认值，以便遵守 WhatsApp 的速率限制。
 MAX_CONCURRENT = 3
 DELAY_SECONDS = 0.5
 
-# Signalled when the broadcast has run, so main() can shut the app down.
+# 在广播运行时发出信号，这样 main() 就可以关闭应用。
 done = asyncio.Event()
 
 
@@ -69,11 +68,10 @@ router = Router(name="broadcast")
 
 @router.connected()
 async def on_connected(event: ConnectedEvent, ctx: Ctx) -> None:
-    """Fan out the broadcast once this account is fully connected.
+    """在此账户完全连接后，执行广播扇出。
 
-    ConnectedEvent fires after ``handle.ready()`` resolves *and* on
-    every subsequent reconnect. We use ``done`` to ensure we send only
-    on the first connect.
+    ConnectedEvent 会在 ``handle.ready()`` 解析后以及每次后续重连时
+    触发。我们使用 ``done`` 来确保只在第一次连接时发送。
     """
     if done.is_set():
         return
@@ -85,8 +83,8 @@ async def on_connected(event: ConnectedEvent, ctx: Ctx) -> None:
     async def send_one(jid: str) -> None:
         async with sem:
             try:
-                # ctx.send is the non-reply equivalent of ctx.reply: it
-                # sends to an arbitrary JID using this ctx's account.
+                # ctx.send 是 ctx.reply 的非回复等价形式：它会使用此 ctx
+                # 的账户向任意 JID 发送消息。
                 result = await ctx.send(jid, BROADCAST_TEXT)
             except InvalidJIDError:
                 logging.warning("skipping malformed jid: %s", jid)
@@ -114,8 +112,8 @@ async def main() -> None:
         await handle.ready(timeout=120)
         print(f"connected: {handle.account_key} -> {handle.jid}")
 
-        # The broadcast happens inside the @router.connected() handler.
-        # Wait for that signal, then exit (no run_forever needed).
+        # 广播在 @router.connected() 处理器内部完成。
+        # 等待该信号，然后退出（不需要 run_forever）。
         await done.wait()
         print("broadcast complete; shutting down")
 

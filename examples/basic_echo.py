@@ -1,20 +1,20 @@
-"""Minimal echo bot.
+"""最小回声机器人。
 
-Run from the repo root::
+从仓库根目录运行::
 
     python examples/basic_echo.py
 
-What this demonstrates:
-    * Building a :class:`Router` with a ``F``-magic filter.
-    * Mounting it on a :class:`FastMeow` app.
-    * QR pairing via ``on_qr="terminal"`` on first run.
-    * Replying in the same chat via ``ctx.reply``.
+这演示了：
+    * 使用带有 ``F`` 魔法过滤器的 :class:`Router`。
+    * 将其挂载到 :class:`FastMeow` 应用上。
+    * 首次运行时通过 ``on_qr="terminal"`` 进行二维码配对。
+    * 通过 ``ctx.reply`` 在同一聊天中回复。
 
-On first run, scan the printed QR with the WhatsApp app
-(Settings -> Linked Devices -> Link a Device). On subsequent runs the
-sidecar reuses the saved session in ``./sessions``.
+首次运行时，请用 WhatsApp 应用扫描打印出的二维码
+（设置 -> 已关联设备 -> 关联设备）。后续运行时，
+sidecar 会复用 ``./sessions`` 中保存的会话。
 
-Stop with Ctrl+C; the supervisor cleans up the sidecar on exit.
+按 Ctrl+C 停止；监督器会在退出时清理 sidecar。
 """
 
 from __future__ import annotations
@@ -42,25 +42,25 @@ router = Router(name="echo")
 
 @router.connected()
 async def announce_online(event: ConnectedEvent, ctx: Ctx) -> None:
-    """Log when each account finishes (re)connecting."""
+    """在每个账户完成（重新）连接时记录日志。"""
     print(f"[{ctx.account_key}] online as {ctx.account_jid}")
 
 
 @router.message(F.text == "ping")
 async def pong(msg: MessageEvent, ctx: Ctx) -> None:
-    """Hello-world filter: react only to the literal text ``ping``."""
+    """Hello-world 过滤器：仅响应字面文本 ``ping``。"""
     await ctx.reply("pong")
 
 
 @router.message(F.is_dm & ~F.from_me)
 async def echo(msg: MessageEvent, ctx: Ctx) -> None:
-    """Catch-all DM echo. Filters compose with ``&``, ``|``, ``~``.
+    """通用 DM 回声。过滤器可与 ``&``、``|``、``~`` 组合。
 
-    First-match-wins: the ``F.text == "ping"`` handler above wins for
-    ``"ping"`` messages, so this handler does not see them.
+    首个匹配优先：上面的 ``F.text == "ping"`` 处理器会优先处理
+    ``"ping"`` 消息，所以这个处理器不会看到它们。
     """
     if not msg.text:
-        return  # ignore non-text payloads (Phase 1 ships text only).
+        return  # 忽略非文本负载（Phase 1 仅提供文本）。
     await ctx.reply(f"echo: {msg.text}")
 
 

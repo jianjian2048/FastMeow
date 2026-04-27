@@ -1,4 +1,4 @@
-"""Tests for the Router: signature inspection + dispatch + filter chains."""
+"""Router 的测试：签名检查＋分发＋过滤链。"""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from fastmeow.types import (
 )
 
 # ---------------------------------------------------------------------------
-# Helpers
+# 辅助函数
 # ---------------------------------------------------------------------------
 
 
@@ -68,7 +68,7 @@ def make_qr(code: str = "raw-code") -> QREvent:
 
 
 def make_ctx(event: Any) -> Ctx:
-    # Filters / dispatch don't touch the client, so a mock is fine.
+    # 过滤器／分发不会触碰客户端，所以用 mock 即可。
     return Ctx(
         account_key="alice",
         account_jid="aaa@s.whatsapp.net",
@@ -78,7 +78,7 @@ def make_ctx(event: Any) -> Ctx:
 
 
 # ---------------------------------------------------------------------------
-# Decorator + signature validation
+# 装饰器＋签名校验
 # ---------------------------------------------------------------------------
 
 
@@ -194,8 +194,8 @@ async def test_unknown_param_raises() -> None:
 
 
 async def test_unknown_param_with_default_allowed() -> None:
-    """User wants to bind something themselves via partial — allowed
-    when there's a default value."""
+    """用户想通过 partial 自行绑定某些内容时——如果有默认值则允许。
+    """
     router = Router()
     seen: list[int] = []
 
@@ -229,7 +229,7 @@ async def test_msg_and_event_simultaneously_rejected() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Filter chains
+# 过滤链
 # ---------------------------------------------------------------------------
 
 
@@ -279,12 +279,12 @@ async def test_async_callable_filter_supported() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Multiple handlers + SkipHandler
+# 多个处理器＋SkipHandler
 # ---------------------------------------------------------------------------
 
 
 async def test_first_match_wins_short_circuits_iteration() -> None:
-    """First matching handler wins; later candidates do not run."""
+    """首个匹配的处理器获胜；后续候选不会运行。"""
     router = Router()
     log: list[str] = []
 
@@ -320,7 +320,7 @@ async def test_skip_handler_falls_through() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Router composition
+# Router 组合
 # ---------------------------------------------------------------------------
 
 
@@ -341,13 +341,13 @@ async def test_include_router_dispatches_subhandlers() -> None:
 
     msg = make_msg(text="x")
     await parent.dispatch(msg, make_ctx(msg))
-    # First-match-wins: parent's own handler is first in iteration
-    # order, so the child handler does not run.
+    # 首个匹配获胜：父级自身处理器在迭代顺序中排在前面，
+    # 因此子处理器不会运行。
     assert log == ["parent"]
 
 
 async def test_include_router_falls_through_to_child_via_skip() -> None:
-    """Child handlers are reachable when parent handlers raise SkipHandler."""
+    """当父级处理器抛出 SkipHandler 时，子处理器仍可到达。"""
     parent = Router(name="parent")
     child = Router(name="child")
     log: list[str] = []
@@ -383,7 +383,7 @@ async def test_include_router_rejects_cycle() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Dispatch error propagation
+# 分发错误传播
 # ---------------------------------------------------------------------------
 
 
@@ -400,7 +400,7 @@ async def test_handler_exception_propagates() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Disconnected event sanity
+# 断开连接事件基本检查
 # ---------------------------------------------------------------------------
 
 
@@ -426,5 +426,5 @@ async def test_disconnected_handler_runs() -> None:
     assert seen == ["kicked"]
 
 
-# ensure async helpers are typed for mypy
+# 确保异步辅助函数对 mypy 保持类型注解
 _: Awaitable[None] | None = None

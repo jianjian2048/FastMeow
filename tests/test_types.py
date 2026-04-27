@@ -1,7 +1,7 @@
-"""Tests for the public types module: enum mapping and proto round-trips.
+"""用于公开 types 模块的测试：枚举映射与 proto 往返转换。
 
-These exercise the conversion helpers without spinning up the sidecar:
-we synthesise protobuf messages directly.
+这些测试在不启动 sidecar 的情况下验证转换辅助函数：
+我们直接构造 protobuf 消息。
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def _base_envelope(seq: int = 7) -> pb.StreamEventsResponse:
 
 
 # ---------------------------------------------------------------------------
-# Enum mapping
+# 枚举映射
 # ---------------------------------------------------------------------------
 
 
@@ -76,7 +76,7 @@ def test_account_from_proto() -> None:
 
 
 # ---------------------------------------------------------------------------
-# event_from_proto: each oneof variant
+# event_from_proto：各个 oneof 变体
 # ---------------------------------------------------------------------------
 
 
@@ -170,12 +170,12 @@ def test_event_from_proto_unknown() -> None:
 
 def test_event_from_proto_returns_none_when_oneof_unset() -> None:
     env = _base_envelope()
-    # No oneof set on purpose.
+    # 故意不设置 oneof。
     assert event_from_proto(env) is None
 
 
 # ---------------------------------------------------------------------------
-# SendResult
+# 发送结果
 # ---------------------------------------------------------------------------
 
 

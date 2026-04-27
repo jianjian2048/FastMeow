@@ -1,23 +1,20 @@
-"""Slash-command bot.
+"""斜杠命令机器人。
 
-Run from the repo root::
+从仓库根目录运行::
 
     python examples/command_bot.py
 
-What this demonstrates:
-    * Dispatching ``/command arg1 arg2`` style messages.
-    * Using ``F.text.startswith("/")`` as a coarse pre-filter, then
-      parsing the command name and args inside the handler.
-    * Handler-local registry pattern for extensibility (add a new
-      command by adding a function to ``COMMANDS``).
-    * ``ctx.reply`` for quoted in-chat responses; ``MessageSendError``
-      handling around the send.
+这演示了：
+    * 分发 ``/command arg1 arg2`` 形式的消息。
+    * 使用 ``F.text.startswith("/")`` 作为粗略预过滤，然后在处理器内部解析命令名和参数。
+    * 处理器局部的注册表模式便于扩展（通过向 ``COMMANDS`` 添加一个函数来新增命令）。
+    * 使用 ``ctx.reply`` 进行带引用的聊天内回复；对发送过程进行 ``MessageSendError`` 处理。
 
-On first run, scan the printed QR with the WhatsApp app
-(Settings -> Linked Devices -> Link a Device). On subsequent runs the
-sidecar reuses the saved session in ``./sessions``.
+首次运行时，请用 WhatsApp 应用扫描打印出的二维码
+（设置 -> 已关联设备 -> 关联设备）。后续运行时，
+sidecar 会复用 ``./sessions`` 中保存的会话。
 
-Try sending these to the bot from another WhatsApp account::
+试着从另一个 WhatsApp 账户向机器人发送这些消息::
 
     /help
     /ping
@@ -49,11 +46,10 @@ logging.basicConfig(
 router = Router(name="commands")
 
 
-# --- Command registry -----------------------------------------------------
+# --- 命令注册表 -----------------------------------------------------
 #
-# Each command is an async function ``(ctx, args) -> str`` that returns
-# the reply text. Returning an empty string means "no reply". Add a new
-# command by writing a function and adding it to COMMANDS below.
+# 每个命令都是一个异步函数 ``(ctx, args) -> str``，它会返回
+# 回复文本。返回空字符串表示“无回复”。通过编写一个函数并将其添加到下面的 COMMANDS 中即可新增命令。
 
 CommandFn = Callable[[Ctx, list[str]], Awaitable[str]]
 
@@ -98,14 +94,12 @@ COMMANDS: dict[str, CommandFn] = {
 
 @router.message(F.text.startswith("/") & ~F.from_me)
 async def on_command(msg: MessageEvent, ctx: Ctx) -> None:
-    """Parse ``/cmd args...`` and dispatch to ``COMMANDS``.
+    """解析 ``/cmd args...`` 并分发到 ``COMMANDS``。
 
-    The ``F.text.startswith("/")`` filter keeps every other message off
-    this handler. ``~F.from_me`` prevents the bot from reacting to its
-    own outbound echoes (which arrive as MessageEvent with from_me=True).
+    ``F.text.startswith("/")`` 过滤器会让其他所有消息都不进入这个处理器。``~F.from_me``
+    可防止机器人对自己发出的回声作出反应（这些回声会以 from_me=True 的 MessageEvent 到达）。
     """
-    # split() with no args also collapses runs of whitespace, which is
-    # what we want for a chat command line.
+    # 不带参数的 split() 也会压缩连续空白，这正是我们对聊天命令行所需要的。
     parts = msg.text.split()
     if not parts:
         return
@@ -129,8 +123,7 @@ async def on_command(msg: MessageEvent, ctx: Ctx) -> None:
     try:
         await ctx.reply(body)
     except MessageSendError:
-        # Network blip, recipient blocked us, etc. Don't crash the
-        # handler loop -- log and move on.
+        # 网络抖动、收件人屏蔽了我们等情况。不要让处理器循环崩溃——记录日志然后继续。
         logging.exception("reply to %s failed", msg.chat_jid)
 
 

@@ -1,13 +1,13 @@
-"""Tests for FastMeow application: AccountHandle + add_account flow.
+"""FastMeow 应用测试：AccountHandle + add_account 流程。
 
-We don't spawn a real sidecar here. Instead the tests construct a
-``FastMeow`` and inject fakes for the transport + manifest, exercising
-the same code paths ``start()`` would have set up.
+这里不会启动真实的 sidecar。测试会构造一个 ``FastMeow``，并注入
+transport 和 manifest 的伪实现，覆盖 ``start()`` 本来会设置的相同
+代码路径。
 
-``add_account`` is **sync-return / async-complete**: it returns an
-``AccountHandle`` immediately and runs ``EnsureAccount`` + ``Connect``
-in a background task. Tests that need the bootstrap to have finished
-``await _drain_bootstraps(app)`` before asserting transport call sites.
+``add_account`` 是 **同步返回 / 异步完成**：它会立即返回一个
+``AccountHandle``，并在后台任务中运行 ``EnsureAccount`` + ``Connect``。
+需要引导流程完成的测试，请先 ``await _drain_bootstraps(app)``，再断言
+transport 的调用点。
 """
 
 from __future__ import annotations
@@ -38,19 +38,19 @@ from fastmeow.types import (
 )
 
 # ---------------------------------------------------------------------------
-# Fakes
+# 伪对象
 # ---------------------------------------------------------------------------
 
 
 class FakeTransport:
-    """Mocks the transport surface FastMeow.add_account / remove_account use."""
+    """模拟 FastMeow.add_account / remove_account 使用的 transport 接口。"""
 
     def __init__(self) -> None:
         self.ensure_calls: list[dict[str, Any]] = []
         self.connect_calls: list[str] = []
         self.disconnect_calls: list[str] = []
         self.logout_calls: list[str] = []
-        # Override these in tests if you need different return values.
+        # 若测试需要不同返回值，可在此覆盖。
         self.ensure_state = Account(account_key="", jid="", state=AccountState.UNPAIRED)
         self.ensure_created = True
         self.connect_state = Account(account_key="", jid="", state=AccountState.CONNECTING)
@@ -97,7 +97,7 @@ async def _build_app(
     tmp_path: Path,
     transport: FakeTransport | None = None,
 ) -> tuple[FastMeow, FakeTransport]:
-    """Build a FastMeow with mocked transport + real manifest, no sidecar."""
+    """构建一个带伪 transport 和真实 manifest、但没有 sidecar 的 FastMeow。"""
     transport = transport or FakeTransport()
     app = FastMeow(session_dir=tmp_path)
     app._manifest = await Manifest.open(tmp_path)
@@ -107,12 +107,11 @@ async def _build_app(
 
 
 async def _drain_bootstraps(app: FastMeow) -> None:
-    """Await every in-flight ``add_account`` background task.
+    """等待所有正在运行的 ``add_account`` 后台任务完成。
 
-    Bootstrap exceptions are intentionally captured into the handle's
-    terminal failure (so ``handle.ready()`` raises them); we therefore
-    swallow them here using ``return_exceptions=True`` and let the
-    individual tests assert via ``ready()``.
+    引导阶段的异常会被有意捕获到 handle 的终态失败中（因此
+    ``handle.ready()`` 会抛出它们）；这里使用 ``return_exceptions=True``
+    吞掉它们，交由各个测试通过 ``ready()`` 来断言。
     """
     pending = [t for t in app._account_tasks if not t.done()]
     if pending:
@@ -220,7 +219,7 @@ async def test_handle_qr_callback_exception_swallowed() -> None:
         raise RuntimeError("oops")
 
     handle.on_qr(bad)
-    # Must not raise.
+    # 不得抛出。
     await handle._on_event(_qr_event("alice", "2@bad"))
 
 
@@ -232,7 +231,7 @@ async def test_handle_qr_callback_exception_swallowed() -> None:
 def test_resolve_qr_callback_terminal_returns_callable(capsys: Any) -> None:
     cb = _resolve_qr_callback("terminal")
     qr = _qr_event("alice", "2@abcd,efgh,ijkl")
-    # The terminal renderer prints; just confirm it's callable and runs.
+    # 终端渲染器会打印；这里只需确认它可调用且能运行。
     cb(qr)
     out = capsys.readouterr().out
     assert out  # something rendered
@@ -265,8 +264,7 @@ async def test_add_account_returns_handle_and_persists_manifest(
     app, _ = await _build_app(tmp_path, transport)
     try:
         handle = app.add_account("alice")
-        # Sync-return contract: AccountHandle is available before any
-        # gRPC round-trip has happened.
+        # 同步返回契约：在任何 gRPC 往返发生前就能拿到 AccountHandle。
         assert isinstance(handle, AccountHandle)
         assert handle.account_key == "alice"
         assert handle.state is AccountState.UNSPECIFIED
@@ -279,7 +277,7 @@ async def test_add_account_returns_handle_and_persists_manifest(
         assert transport.ensure_calls == [{"account_key": "alice", "display_name": "", "jid": ""}]
         assert transport.connect_calls == ["alice"]
 
-        # Manifest persisted.
+        # Manifest 已持久化。
         assert app._manifest is not None
         entry = app._manifest.get("alice")
         assert entry is not None
@@ -293,7 +291,7 @@ async def test_add_account_uses_manifest_jid_when_none_passed(tmp_path: Path) ->
     transport = FakeTransport()
     app, _ = await _build_app(tmp_path, transport)
     try:
-        # Pre-seed manifest as if a previous run paired this account.
+        # 预先写入 manifest，就像此前运行已完成该账号配对一样。
         await app._manifest.register(  # type: ignore[union-attr]
             "alice", jid="alice@s.whatsapp.net"
         )
@@ -307,10 +305,10 @@ async def test_add_account_uses_manifest_jid_when_none_passed(tmp_path: Path) ->
 
 @pytest.mark.asyncio
 async def test_add_account_explicit_jid_must_match_manifest(tmp_path: Path) -> None:
-    """Manifest is the source of truth; explicit conflicting JID is rejected.
+    """manifest 是唯一真相；显式冲突的 JID 会被拒绝。
 
-    Bootstrap failure now surfaces through ``handle.ready()`` rather than
-    from ``add_account`` itself (which is sync-return).
+    现在引导失败会通过 ``handle.ready()`` 暴露出来，而不是从
+    ``add_account`` 本身抛出（它是同步返回）。
     """
     from fastmeow.exceptions import ManifestError
 
@@ -324,7 +322,7 @@ async def test_add_account_explicit_jid_must_match_manifest(tmp_path: Path) -> N
         await _drain_bootstraps(app)
         with pytest.raises(ManifestError):
             await handle.ready(timeout=0.1)
-        # Sidecar must not have been called for the conflicting flow.
+        # 对于冲突流程，sidecar 不得被调用。
         assert transport.ensure_calls == []
     finally:
         await app._manifest.close()  # type: ignore[union-attr]
@@ -332,7 +330,7 @@ async def test_add_account_explicit_jid_must_match_manifest(tmp_path: Path) -> N
 
 @pytest.mark.asyncio
 async def test_add_account_explicit_jid_matching_manifest_ok(tmp_path: Path) -> None:
-    """Explicit JID matching the manifest entry is fine."""
+    """与 manifest 条目匹配的显式 JID 没问题。"""
     transport = FakeTransport()
     app, _ = await _build_app(tmp_path, transport)
     try:
@@ -360,8 +358,8 @@ async def test_add_account_duplicate_raises(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_add_account_connect_failure_rolls_back_handle(tmp_path: Path) -> None:
-    """When the bootstrap task fails, ``handle.ready()`` raises and the
-    handle is dropped so the user can retry ``add_account``."""
+    """当引导任务失败时，``handle.ready()`` 会抛出异常，并且该
+    handle 会被移除，用户即可重试 ``add_account``。"""
     transport = FakeTransport()
     transport.connect_raises = RuntimeError("connect blew up")
     app, _ = await _build_app(tmp_path, transport)
@@ -370,7 +368,7 @@ async def test_add_account_connect_failure_rolls_back_handle(tmp_path: Path) -> 
         await _drain_bootstraps(app)
         with pytest.raises(RuntimeError, match="connect blew up"):
             await handle.ready(timeout=0.1)
-        # Handle must not linger after the failed bootstrap.
+        # 失败的引导结束后，handle 不能残留。
         assert "alice" not in app._handles
         with pytest.raises(AccountNotFoundError):
             app.get_handle("alice")
@@ -426,8 +424,8 @@ async def test_remove_account_not_found(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_notify_handle_dispatches_connected(tmp_path: Path) -> None:
-    """The dispatcher's on_event hook (== app._notify_handle) must
-    propagate state updates into the AccountHandle so ready() unblocks."""
+    """dispatcher 的 on_event 钩子（== app._notify_handle）必须把
+    状态更新传播到 AccountHandle 中，以便 ready() 解除阻塞。"""
     transport = FakeTransport()
     app, _ = await _build_app(tmp_path, transport)
     try:
@@ -444,7 +442,7 @@ async def test_notify_handle_dispatches_connected(tmp_path: Path) -> None:
 async def test_notify_handle_ignores_unknown_account(tmp_path: Path) -> None:
     app, _ = await _build_app(tmp_path)
     try:
-        # Must not raise even if no handle for the account_key exists.
+        # 即使不存在对应 account_key 的 handle，也不能抛出异常。
         await app._notify_handle(_connected_event("ghost", ""))
     finally:
         await app._manifest.close()  # type: ignore[union-attr]
@@ -459,7 +457,7 @@ async def test_get_handle_and_accounts_snapshot(tmp_path: Path) -> None:
         assert app.get_handle("alice") is h
         snap = app.accounts
         assert "alice" in snap
-        # Snapshot is a copy.
+        # 该快照是副本。
         snap.clear()
         assert "alice" in app.accounts
     finally:
@@ -467,7 +465,7 @@ async def test_get_handle_and_accounts_snapshot(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Regression suite (Oracle review #12)
+# 回归套件（Oracle review #12）
 # ---------------------------------------------------------------------------
 
 
@@ -495,14 +493,13 @@ def _disconnected_event(account_key: str, reason: str = "") -> DisconnectedEvent
 
 @pytest.mark.asyncio
 async def test_pair_success_event_persists_jid_to_manifest(tmp_path: Path) -> None:
-    """Oracle BLOCKER #1: a freshly-paired account's JID must be written
-    to the manifest synchronously with the PairSuccessEvent so a process
-    restart can reattach without re-pairing."""
+    """Oracle 阻断项 #1：新配对账号的 JID 必须与 PairSuccessEvent
+    同步写入 manifest，这样进程重启后才能无需重新配对直接重新挂载。"""
     app, _ = await _build_app(tmp_path)
     try:
         handle = app.add_account("alice")
         await _drain_bootstraps(app)
-        # Manifest entry exists but jid is empty (new device, pre-pair).
+        # manifest 条目已存在，但 jid 为空（新设备，尚未配对）。
         entry = app._manifest.get("alice")  # type: ignore[union-attr]
         assert entry is not None
         assert entry.jid == ""
@@ -512,8 +509,8 @@ async def test_pair_success_event_persists_jid_to_manifest(tmp_path: Path) -> No
         entry = app._manifest.get("alice")  # type: ignore[union-attr]
         assert entry is not None
         assert entry.jid == "alice@s.whatsapp.net"
-        # Handle's own view also reflects the JID, but state stays
-        # PAIRING until the subsequent ConnectedEvent.
+        # handle 自身视图也会反映该 JID，但状态会保持为
+        # PAIRING，直到后续的 ConnectedEvent。
         assert handle.jid == "alice@s.whatsapp.net"
     finally:
         await app._manifest.close()  # type: ignore[union-attr]
@@ -521,26 +518,26 @@ async def test_pair_success_event_persists_jid_to_manifest(tmp_path: Path) -> No
 
 @pytest.mark.asyncio
 async def test_handle_state_machine_does_not_downgrade_connected() -> None:
-    """Oracle HIGH #5: once CONNECTED, a stale RPC reply showing
-    CONNECTING must not roll us back."""
+    """Oracle 高优先级 #5：一旦进入 CONNECTED，显示为
+    CONNECTING 的过时 RPC 回复不得把状态回滚。"""
     handle = AccountHandle("alice")
     await handle._on_event(_connected_event("alice", "alice@s.whatsapp.net"))
     assert handle.state == AccountState.CONNECTED
 
-    # Simulate a late RPC response.
+    # 模拟一个延迟到达的 RPC 响应。
     handle._apply_state(AccountState.CONNECTING, jid="alice@s.whatsapp.net")
     assert handle.state == AccountState.CONNECTED
 
 
 @pytest.mark.asyncio
 async def test_handle_terminal_logged_out_is_sticky() -> None:
-    """Oracle HIGH #5: LOGGED_OUT is terminal; later events must not
-    revive the handle."""
+    """Oracle 高优先级 #5：LOGGED_OUT 是终态；后续事件不得
+    让 handle 复活。"""
     handle = AccountHandle("alice")
     await handle._on_event(_logged_out_event("alice", "revoked"))
     assert handle.state == AccountState.LOGGED_OUT
 
-    # A spurious ConnectedEvent (e.g. server quirk) must not undo logout.
+    # 一个伪造的 ConnectedEvent（例如服务端怪异行为）不得撤销登出。
     await handle._on_event(_connected_event("alice", "alice@s.whatsapp.net"))
     assert handle.state == AccountState.LOGGED_OUT
     with pytest.raises(PairingFailedError):
@@ -549,9 +546,8 @@ async def test_handle_terminal_logged_out_is_sticky() -> None:
 
 @pytest.mark.asyncio
 async def test_handle_disconnected_event_does_not_wake_ready() -> None:
-    """Oracle HIGH #5: a paired account dropping its connection should
-    not satisfy ``ready()`` -- auto-reconnect emits a fresh
-    ConnectedEvent that does."""
+    """Oracle 高优先级 #5：已配对账号断开连接后，不应满足
+    ``ready()`` -- 自动重连会发出一个新的 ConnectedEvent 来满足它。"""
     handle = AccountHandle("alice")
     await handle._on_event(_connected_event("alice", "alice@s.whatsapp.net"))
     assert handle.state is AccountState.CONNECTED
@@ -559,9 +555,9 @@ async def test_handle_disconnected_event_does_not_wake_ready() -> None:
     await handle._on_event(_disconnected_event("alice", "network"))
     state_after: AccountState = handle.state
     assert state_after is AccountState.DISCONNECTED
-    # ``_connected`` was already set by the prior CONNECTED transition,
-    # so ready() returns immediately without raising. The contract is
-    # only "wake on first CONNECTED or terminal failure".
+    # ``_connected`` 已在之前的 CONNECTED 迁移中被置位，
+    # 因此 ready() 会立即返回且不抛出异常。契约仅要求
+    # “在首次 CONNECTED 或终态失败时唤醒”。
     await handle.ready(timeout=0.05)
     assert handle._terminal_failure is None
 
@@ -570,10 +566,9 @@ async def test_handle_disconnected_event_does_not_wake_ready() -> None:
 async def test_add_account_already_connected_short_circuits_ready(
     tmp_path: Path,
 ) -> None:
-    """If the sidecar reports CONNECTED on EnsureAccount/Connect (e.g.
-    the account was already alive in a previous run reattached on
-    sidecar boot), :meth:`AccountHandle.ready` resolves without needing
-    a follow-up event."""
+    """如果 sidecar 在 EnsureAccount/Connect 时报告 CONNECTED（例如
+    账号在上一次运行中已存活，并在 sidecar 启动时重新挂载），则
+    :meth:`AccountHandle.ready` 会直接完成，而无需后续事件。"""
     transport = FakeTransport()
     transport.ensure_state = Account(
         account_key="alice", jid="alice@s.whatsapp.net", state=AccountState.CONNECTED
@@ -596,9 +591,9 @@ async def test_add_account_already_connected_short_circuits_ready(
 async def test_start_rolls_back_when_dispatcher_start_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Oracle BLOCKER #2: if any acquisition step fails, every
-    previously-acquired resource must be torn down and ``_started``
-    must remain False so the user can retry."""
+    """Oracle 阻断项 #2：如果任何获取步骤失败，所有先前获取的
+    资源都必须被拆除，并且 ``_started`` 必须保持为 False，
+    这样用户才能重试。"""
     from fastmeow import _dispatcher, _transport
     from fastmeow import app as app_module
 
@@ -637,9 +632,8 @@ async def test_start_rolls_back_when_dispatcher_start_fails(
     async def _boom_start(self: object) -> None:
         raise RuntimeError("dispatcher boom")
 
-    # ``app`` module imports ``Sidecar`` / ``Dispatcher`` into its own
-    # namespace via ``from ._supervisor import ...``; patch those bindings
-    # rather than the source modules.
+    # ``app`` 模块通过 ``from ._supervisor import ...`` 将 ``Sidecar`` / ``Dispatcher``
+    # 导入到自身命名空间；应当 patch 这些绑定，而不是源模块。
     monkeypatch.setattr(app_module, "Sidecar", _FakeSidecar)
     monkeypatch.setattr(_transport, "connect", _fake_connect)
     monkeypatch.setattr(_dispatcher.Dispatcher, "start", _boom_start)
@@ -648,15 +642,15 @@ async def test_start_rolls_back_when_dispatcher_start_fails(
     with pytest.raises(RuntimeError, match="dispatcher boom"):
         await app.start()
 
-    # Rollback contract: state is pre-start.
+    # 回滚契约：状态应停留在启动前。
     assert app._started is False
     assert app._dispatcher is None
     assert app._transport is None
     assert app._sidecar is None
     assert app._manifest is None
-    # Resources we *did* acquire were cleaned up.
+    # 我们*确实*获取到的资源已被清理。
     assert sidecar_stops == [True]
     assert transport_closes == [True]
-    # Manifest file lock released; opening again must succeed.
+    # manifest 文件锁已释放；再次打开必须成功。
     m = await Manifest.open(tmp_path)
     await m.close()

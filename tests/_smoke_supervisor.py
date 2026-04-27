@@ -1,7 +1,7 @@
-"""Quick interactive smoke for the Sidecar supervisor.
+"""Sidecar supervisor 的快速交互 smoke。
 
-Not a pytest test (it spawns the real Go binary and listens on a real
-TCP port). Run manually:
+这不是 pytest 测试（它会启动真实的 Go 二进制并监听真实的 TCP 端口）。
+手动运行：
 
     .\\.venv\\Scripts\\python.exe -m tests._smoke_supervisor
 """
@@ -24,7 +24,7 @@ async def main() -> None:
         await sc.start()
         print(f"[smoke] pid={sc.pid}")
 
-        # Concurrently print a few log lines while waiting for ready.
+        # 在等待 ready 时并发打印几条日志。
         async def tail() -> None:
             async for log in sc.logs():
                 print(f"[sidecar] event={log.event} fields={log.fields}")

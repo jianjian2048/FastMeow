@@ -1,9 +1,8 @@
-"""Tests for the Dispatcher: per-account ordering, hooks, drain.
+"""Dispatcher 测试：按账号排序、钩子、drain。
 
-We don't spin up a real gRPC channel here. Instead a ``FakeTransport``
-exposes the same surface the dispatcher uses (``stream_events`` plus the
-``send_text`` method that ``_BoundClient`` forwards to) and lets each
-test push events into an asyncio.Queue.
+这里不会启动真实的 gRPC 通道。相反，``FakeTransport`` 暴露 dispatcher
+使用的同样接口（``stream_events`` 以及 ``_BoundClient`` 转发到的
+``send_text`` 方法），并让每个测试把事件推入 asyncio.Queue。
 """
 
 from __future__ import annotations
@@ -27,24 +26,24 @@ from fastmeow.types import (
 )
 
 # ---------------------------------------------------------------------------
-# Fakes
+# 伪对象
 # ---------------------------------------------------------------------------
 
 
 class FakeTransport:
-    """Minimal stand-in for :class:`fastmeow._transport.Transport`.
+    """:class:`fastmeow._transport.Transport` 的最小替身。
 
-    The dispatcher only touches:
-        * ``stream_events()`` -> async iterator
-        * (indirectly via ``_BoundClient``) ``send_text(...)``
-    Everything else is unused so we leave it off.
+    dispatcher 只会碰到：
+        * ``stream_events()`` -> 异步迭代器
+        * （通过 ``_BoundClient`` 间接调用）``send_text(...)``
+    其余部分都不会用到，所以不实现。
     """
 
     def __init__(self) -> None:
         self._queue: asyncio.Queue[Event | None] = asyncio.Queue()
         self.send_calls: list[dict[str, Any]] = []
-        # Set when stream_events generator is entered, so tests can wait
-        # for the dispatcher to actually start consuming.
+        # 在进入 stream_events 生成器时置位，这样测试可以等待
+        # dispatcher 真正开始消费。
         self.streaming = asyncio.Event()
 
     async def push(self, event: Event) -> None:
@@ -113,7 +112,7 @@ def make_connected(seq: int, account_key: str) -> ConnectedEvent:
 
 
 # ---------------------------------------------------------------------------
-# Tests
+# 测试
 # ---------------------------------------------------------------------------
 
 
@@ -132,7 +131,7 @@ async def test_dispatcher_routes_event_to_handler() -> None:
     await transport.streaming.wait()
 
     await transport.push(make_message(1, "alice", "ping"))
-    # Allow the per-account worker to pick it up.
+    # 让按账号 worker 有机会取走它。
     for _ in range(20):
         if seen:
             break
@@ -152,7 +151,7 @@ async def test_per_account_ordering_preserved() -> None:
 
     @router.message()
     async def handler(msg: MessageEvent, ctx: Ctx) -> None:
-        # Slow handlers must not reorder events for the same account.
+        # 慢处理器不得打乱同一账号的事件顺序。
         await asyncio.sleep(0.005)
         seen.append((msg.account_key, msg.seq))
 
@@ -165,7 +164,7 @@ async def test_per_account_ordering_preserved() -> None:
     for seq in range(101, 106):
         await transport.push(make_message(seq, "bob"))
 
-    # Drain.
+    # 排空。
     for _ in range(100):
         if len(seen) == 10:
             break
@@ -182,7 +181,7 @@ async def test_per_account_ordering_preserved() -> None:
 
 @pytest.mark.asyncio
 async def test_cross_account_concurrency() -> None:
-    """Slow handler on account A must not block account B."""
+    """账号 A 上的慢处理器不得阻塞账号 B。"""
     transport = FakeTransport()
     router = Router()
     a_release = asyncio.Event()
@@ -202,7 +201,7 @@ async def test_cross_account_concurrency() -> None:
     await transport.push(make_message(1, "alice"))
     await transport.push(make_message(1, "bob"))
 
-    # bob must finish even while alice's handler is parked.
+    # 即使 alice 的处理器挂起，bob 也必须完成。
     await asyncio.wait_for(b_done.wait(), timeout=1.0)
 
     a_release.set()
@@ -232,13 +231,13 @@ async def test_handler_exception_routed_to_on_error() -> None:
     await transport.push(make_message(1, "alice"))
     await transport.push(make_message(2, "alice", "still alive"))
 
-    # Wait until BOTH events have been processed (one error + one ok).
+    # 等待两个事件都处理完（一个错误 + 一个成功）。
     for _ in range(100):
         if captured and len(transport.send_calls) >= 0:
             await asyncio.sleep(0.02)
             break
         await asyncio.sleep(0.01)
-    # Settle.
+    # 稳定一下。
     await asyncio.sleep(0.05)
 
     await transport.end_stream()
@@ -310,7 +309,7 @@ async def test_on_event_hook_exception_does_not_block_dispatch() -> None:
 
 @pytest.mark.asyncio
 async def test_ctx_client_send_text_routes_to_transport() -> None:
-    """The bound client passed in Ctx must hit the right account_key."""
+    """传入 Ctx 的绑定 client 必须命中正确的 account_key。"""
     transport = FakeTransport()
     router = Router()
 
@@ -359,7 +358,7 @@ async def test_stop_is_idempotent() -> None:
     await d.start()
     await transport.end_stream()
     await d.stop()
-    # Second stop must not raise.
+    # 第二次 stop 也不得抛出异常。
     await d.stop()
 
 
@@ -381,11 +380,11 @@ async def test_stream_eof_completes_run_until_stopped() -> None:
 
 @pytest.mark.asyncio
 async def test_queue_overflow_fails_fast() -> None:
-    """When per-account queue is full, dispatcher fails fast.
+    """当按账号队列已满时，dispatcher 必须快速失败。
 
-    0.1.0 semantics: every streamed event is critical, so silent
-    drop-oldest would desynchronize handler state. The read loop must
-    raise :class:`BackpressureError` and the dispatcher must stop.
+    0.1.0 语义：每个流入的事件都很关键，因此静默的
+    drop-oldest 会让处理器状态失步。读取循环必须抛出
+    :class:`BackpressureError`，并且 dispatcher 必须停止。
     """
     transport = FakeTransport()
     router = Router()
@@ -393,24 +392,24 @@ async def test_queue_overflow_fails_fast() -> None:
 
     @router.message()
     async def handler(msg: MessageEvent, ctx: Ctx) -> None:
-        # Park indefinitely so the queue can fill.
+        # 无限挂起，这样队列就能被塞满。
         await gate.wait()
 
     d = Dispatcher(transport, router, per_account_queue_size=2)  # type: ignore[arg-type]
     await d.start()
     await transport.streaming.wait()
 
-    # 1 -> handler (parks). 2, 3 -> queue (full). 4 -> overflow.
+    # 1 -> handler（挂起）。2、3 -> 队列（满）。4 -> 溢出。
     await transport.push(make_message(1, "alice"))
-    await asyncio.sleep(0.02)  # let handler pick up event 1
+    await asyncio.sleep(0.02)  # 让 handler 取走事件 1
     await transport.push(make_message(2, "alice"))
     await transport.push(make_message(3, "alice"))
     await transport.push(make_message(4, "alice"))
 
-    # Read loop should terminate with BackpressureError.
+    # 读取循环应以 BackpressureError 终止。
     with pytest.raises(BackpressureError):
         await asyncio.wait_for(d.run_until_stopped(), timeout=1.0)
 
-    # Release the parked handler so stop() can drain.
+    # 释放挂起的 handler，以便 stop() 可以 drain。
     gate.set()
     await d.stop()

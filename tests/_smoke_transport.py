@@ -1,9 +1,9 @@
-"""End-to-end smoke for supervisor + transport handshake.
+"""supervisor + transport 握手的端到端 smoke。
 
-Spawns the real Go sidecar, opens a gRPC channel, calls Ping, verifies the
-protocol version, and shuts everything down cleanly.
+会启动真实的 Go sidecar、打开 gRPC 通道、调用 Ping、验证协议版本，
+并干净地关闭所有组件。
 
-Run manually:
+手动运行：
     .\\.venv\\Scripts\\python.exe -m tests._smoke_transport
 """
 
@@ -34,7 +34,7 @@ async def main() -> None:
             f"id={transport.sidecar_id}"
         )
 
-        # Try EnsureAccount on a fresh key (creates an unpaired device)
+        # 在一个新 key 上尝试 EnsureAccount（会创建未配对设备）
         state, created = await transport.ensure_account(
             account_key="smoke-test", display_name="Smoke"
         )

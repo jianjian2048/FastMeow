@@ -1,4 +1,4 @@
-"""Tests for the magic-F filter DSL."""
+"""用于 magic-F 过滤器 DSL 的测试。"""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ class FakeMsg:
 
 
 # ---------------------------------------------------------------------------
-# Attribute access & truthiness
+# 属性访问与真值判断
 # ---------------------------------------------------------------------------
 
 
@@ -31,16 +31,16 @@ def test_attr_truthy() -> None:
 
 
 def test_attr_falsy() -> None:
-    msg = FakeMsg()  # all defaults
+    msg = FakeMsg()  # 全部为默认值
     assert F.text.resolve(msg).passed is False
     assert F.is_group.resolve(msg).passed is False
 
 
 def test_attr_missing_returns_false_no_raise() -> None:
-    """Accessing an attribute that doesn't exist must not raise.
+    """访问不存在的属性时必须不抛异常。
 
-    Filters are written against the public Event union; not every event
-    type has every field, so a graceful False is the contract.
+    过滤器是针对公开的 Event 联合类型编写的；并非每种事件类型
+    都拥有所有字段，因此优雅返回 False 才是约定。
     """
     msg = FakeMsg()
     result = F.does_not_exist.resolve(msg)
@@ -49,7 +49,7 @@ def test_attr_missing_returns_false_no_raise() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Comparisons
+# 比较
 # ---------------------------------------------------------------------------
 
 
@@ -71,7 +71,7 @@ def test_eq_on_missing_attribute_is_false() -> None:
 
 
 # ---------------------------------------------------------------------------
-# String predicates
+# 字符串谓词
 # ---------------------------------------------------------------------------
 
 
@@ -93,7 +93,7 @@ def test_contains() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Regex
+# 正则表达式
 # ---------------------------------------------------------------------------
 
 
@@ -121,7 +121,7 @@ def test_regex_accepts_compiled_pattern() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Combinators
+# 组合器
 # ---------------------------------------------------------------------------
 
 
@@ -166,15 +166,15 @@ def test_in_with_set() -> None:
 
 
 def test_in_unhashable_unsupported_falsy() -> None:
-    """Containers that don't support `in` produce False, not crash."""
+    """不支持 `in` 的容器应返回 False，而不是崩溃。"""
     msg = FakeMsg(text="x")
-    # int isn't iterable; should evaluate to False without raising.
+    # int 不可迭代；应在不抛异常的情况下求值为 False。
     res = F.text.in_(42).resolve(msg)
     assert res.passed is False
 
 
 # ---------------------------------------------------------------------------
-# Construction sanity
+# 构造校验
 # ---------------------------------------------------------------------------
 
 
@@ -184,7 +184,7 @@ def test_F_is_singleton_and_attr_chain_returns_magic() -> None:
 
 
 def test_dunder_attr_blocked() -> None:
-    """Dunder access on F must raise so unrelated lookups (pickle,
-    copy.deepcopy, etc.) don't accidentally produce magic nodes."""
+    """F 上的双下划线访问必须抛异常，这样无关查找（pickle、
+    copy.deepcopy 等）就不会意外生成魔法节点。"""
     with pytest.raises(AttributeError):
         F.__nope__  # noqa: B018

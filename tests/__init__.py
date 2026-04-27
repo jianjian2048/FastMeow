@@ -1,1 +1,1 @@
-"""Pytest configuration shared across the test suite."""
+"""测试套件中共享的 Pytest 配置。"""
