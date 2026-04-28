@@ -49,6 +49,7 @@ import (
 	"time"
 
 	"go.mau.fi/whatsmeow"
+	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
 	waLog "go.mau.fi/whatsmeow/util/log"
@@ -267,9 +268,18 @@ func (b *Bus) translate(accountKey string, evt any) []*pb.StreamEventsResponse {
 		return []*pb.StreamEventsResponse{base}
 
 	case *events.Message:
+		// 优先尝试翻译为 MediaMessageEvent（Phase 4.3）。媒体消息在
+		// WhatsApp 协议里独立于 Conversation/ExtendedTextMessage，
+		// 不会被 extractText 拾起，因此先 dispatch 媒体路径。若不是
+		// 媒体，再 fallback 到文本 MessageEvent。两条路径互斥。
+		if mme := mediaMessageEvent(e); mme != nil {
+			base := mk()
+			base.Event = &pb.StreamEventsResponse_MediaMessage{MediaMessage: mme}
+			return []*pb.StreamEventsResponse{base}
+		}
 		me := messageEvent(e)
 		if me == nil {
-			return nil // 第一阶段不支持的消息类型（例如仅包含媒体）
+			return nil // 既非文本也非已识别媒体；丢弃
 		}
 		base := mk()
 		base.Event = &pb.StreamEventsResponse_Message{Message: me}
@@ -530,6 +540,134 @@ func extractText(e *events.Message) (text, replyTo string) {
 		}
 	}
 	return text, replyTo
+}
+
+// mediaMessageEvent 将携带媒体子消息的 *events.Message 翻译为
+// pb.MediaMessageEvent。按 image/video/audio/document/sticker 顺序检测；
+// 一条 WhatsApp 消息至多带一种媒体子消息。若无媒体子消息则返回 nil，
+// 调用方据此 fallback 到文本 MessageEvent。
+//
+// MediaInfo 仅含可序列化字段 + 下载凭据；不含明文字节 —— 后者由
+// Python 通过单独的 DownloadMedia RPC 拉取（见 plan §3.6）。
+func mediaMessageEvent(e *events.Message) *pb.MediaMessageEvent {
+	if e == nil || e.Message == nil {
+		return nil
+	}
+	media, caption, replyTo := extractMediaInfo(e.Message)
+	if media == nil {
+		return nil
+	}
+	return &pb.MediaMessageEvent{
+		MessageId:        e.Info.ID,
+		ChatJid:          e.Info.Chat.String(),
+		SenderJid:        e.Info.Sender.String(),
+		FromMe:           e.Info.IsFromMe,
+		Timestamp:        timestamppb.New(e.Info.Timestamp),
+		IsGroup:          e.Info.IsGroup,
+		ReplyToMessageId: replyTo,
+		Caption:          caption,
+		Media:            media,
+	}
+}
+
+// extractMediaInfo 检查 waE2E.Message 的各媒体子消息槽位，返回首个
+// 命中的 MediaInfo / caption / replyTo。caption 在顶层冗余存储以便
+// F.text 等过滤器无需向 media 内钻探。
+func extractMediaInfo(msg *waE2E.Message) (info *pb.MediaInfo, caption, replyTo string) {
+	if img := msg.GetImageMessage(); img != nil {
+		caption = img.GetCaption()
+		replyTo = img.GetContextInfo().GetStanzaID()
+		info = &pb.MediaInfo{
+			Kind:          pb.MediaKind_MEDIA_KIND_IMAGE,
+			MimeType:      img.GetMimetype(),
+			FileLength:    img.GetFileLength(),
+			Caption:       caption,
+			DirectPath:    img.GetDirectPath(),
+			MediaKey:      img.GetMediaKey(),
+			FileSha256:    img.GetFileSHA256(),
+			FileEncSha256: img.GetFileEncSHA256(),
+			ThumbnailJpeg: img.GetJPEGThumbnail(),
+			Width:         img.GetWidth(),
+			Height:        img.GetHeight(),
+			Url:           img.GetURL(),
+		}
+		return info, caption, replyTo
+	}
+	if vid := msg.GetVideoMessage(); vid != nil {
+		caption = vid.GetCaption()
+		replyTo = vid.GetContextInfo().GetStanzaID()
+		info = &pb.MediaInfo{
+			Kind:            pb.MediaKind_MEDIA_KIND_VIDEO,
+			MimeType:        vid.GetMimetype(),
+			FileLength:      vid.GetFileLength(),
+			Caption:         caption,
+			DirectPath:      vid.GetDirectPath(),
+			MediaKey:        vid.GetMediaKey(),
+			FileSha256:      vid.GetFileSHA256(),
+			FileEncSha256:   vid.GetFileEncSHA256(),
+			ThumbnailJpeg:   vid.GetJPEGThumbnail(),
+			Width:           vid.GetWidth(),
+			Height:          vid.GetHeight(),
+			DurationSeconds: vid.GetSeconds(),
+			Url:             vid.GetURL(),
+		}
+		return info, caption, replyTo
+	}
+	if aud := msg.GetAudioMessage(); aud != nil {
+		// audio 无 caption；replyTo 仍可能存在。
+		replyTo = aud.GetContextInfo().GetStanzaID()
+		info = &pb.MediaInfo{
+			Kind:            pb.MediaKind_MEDIA_KIND_AUDIO,
+			MimeType:        aud.GetMimetype(),
+			FileLength:      aud.GetFileLength(),
+			DirectPath:      aud.GetDirectPath(),
+			MediaKey:        aud.GetMediaKey(),
+			FileSha256:      aud.GetFileSHA256(),
+			FileEncSha256:   aud.GetFileEncSHA256(),
+			DurationSeconds: aud.GetSeconds(),
+			VoiceNote:       aud.GetPTT(),
+			Url:             aud.GetURL(),
+		}
+		return info, "", replyTo
+	}
+	if doc := msg.GetDocumentMessage(); doc != nil {
+		// document 的 caption 字段语义上是「文件描述」；whatsmeow 暴露同名 Caption。
+		caption = doc.GetCaption()
+		replyTo = doc.GetContextInfo().GetStanzaID()
+		info = &pb.MediaInfo{
+			Kind:          pb.MediaKind_MEDIA_KIND_DOCUMENT,
+			MimeType:      doc.GetMimetype(),
+			FileName:      doc.GetFileName(),
+			FileLength:    doc.GetFileLength(),
+			Caption:       caption,
+			DirectPath:    doc.GetDirectPath(),
+			MediaKey:      doc.GetMediaKey(),
+			FileSha256:    doc.GetFileSHA256(),
+			FileEncSha256: doc.GetFileEncSHA256(),
+			ThumbnailJpeg: doc.GetJPEGThumbnail(),
+			Url:           doc.GetURL(),
+		}
+		return info, caption, replyTo
+	}
+	if stk := msg.GetStickerMessage(); stk != nil {
+		// sticker 永不带 caption。
+		replyTo = stk.GetContextInfo().GetStanzaID()
+		info = &pb.MediaInfo{
+			Kind:          pb.MediaKind_MEDIA_KIND_STICKER,
+			MimeType:      stk.GetMimetype(),
+			FileLength:    stk.GetFileLength(),
+			DirectPath:    stk.GetDirectPath(),
+			MediaKey:      stk.GetMediaKey(),
+			FileSha256:    stk.GetFileSHA256(),
+			FileEncSha256: stk.GetFileEncSHA256(),
+			Width:         stk.GetWidth(),
+			Height:        stk.GetHeight(),
+			Animated:      stk.GetIsAnimated(),
+			Url:           stk.GetURL(),
+		}
+		return info, "", replyTo
+	}
+	return nil, "", ""
 }
 
 // loggedOutReason 将 *events.LoggedOut 渲染为 proto 中携带的自由格式
