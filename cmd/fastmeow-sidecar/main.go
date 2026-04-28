@@ -17,6 +17,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
@@ -39,6 +40,7 @@ import (
 	"github.com/jianjian2048/fastmeow/internal/accounts"
 	"github.com/jianjian2048/fastmeow/internal/events"
 	"github.com/jianjian2048/fastmeow/internal/groups"
+	"github.com/jianjian2048/fastmeow/internal/media"
 	"github.com/jianjian2048/fastmeow/internal/messages"
 	"github.com/jianjian2048/fastmeow/internal/presence"
 	"github.com/jianjian2048/fastmeow/internal/receipts"
@@ -113,6 +115,10 @@ func main() {
 	groupsHandler := groups.NewHandler()
 	receiptsHandler := receipts.NewHandler()
 	presenceHandler := presence.NewHandler()
+	// 媒体临时文件落到 session 根下的 _media_tmp/，与各账号 session
+	// 隔离；全局并发上限 4 是 plan §2.6 的默认值，单机 100+ 账号下
+	// 既能避免出口带宽抢占，又给单账号留充足吞吐。
+	mediaHandler := media.NewHandler(*sessionDir, 4)
 
 	lis, cleanup, err := newListener(*listenSpec)
 	if err != nil {
@@ -131,7 +137,7 @@ func main() {
 		grpc.MaxSendMsgSize(16*1024*1024),
 	)
 
-	gw := newGateway(*sidecarID, store, registry, bus, sender, groupsHandler, receiptsHandler, presenceHandler, rootLog.Sub("gw"))
+	gw := newGateway(*sidecarID, store, registry, bus, sender, groupsHandler, receiptsHandler, presenceHandler, mediaHandler, rootLog.Sub("gw"))
 	pb.RegisterGatewayServiceServer(srv, gw)
 
 	// 协同关闭：
@@ -220,6 +226,7 @@ type gateway struct {
 	groups     *groups.Handler
 	receipts   *receipts.Handler
 	presence   *presence.Handler
+	media      *media.Handler
 	log        waLog.Logger
 	shutdownCh chan struct{}
 	shutdownMu sync.Mutex
@@ -234,6 +241,7 @@ func newGateway(
 	groupsHandler *groups.Handler,
 	receiptsHandler *receipts.Handler,
 	presenceHandler *presence.Handler,
+	mediaHandler *media.Handler,
 	log waLog.Logger,
 ) *gateway {
 	return &gateway{
@@ -245,6 +253,7 @@ func newGateway(
 		groups:     groupsHandler,
 		receipts:   receiptsHandler,
 		presence:   presenceHandler,
+		media:      mediaHandler,
 		log:        log,
 		shutdownCh: make(chan struct{}),
 	}
@@ -783,6 +792,147 @@ func presenceErrToStatus(err error) error {
 	case errors.Is(err, presence.ErrInvalidJID),
 		errors.Is(err, presence.ErrInvalidPresenceType),
 		errors.Is(err, presence.ErrInvalidChatPresenceState):
+		return status.Errorf(codes.InvalidArgument, "%v", err)
+	default:
+		return status.Errorf(codes.Unavailable, "%v", err)
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 媒体 RPC（Phase 4.3）
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// SendMedia (client streaming):
+//   1. 第 1 帧必须是 SendMediaInit；解析 account_key 拿 client。
+//   2. 启动一条 io.Pipe；后续 chunk 帧写入 pipe.Writer，media.Send 在另一
+//      goroutine 上 io.Copy 读取并 UploadReader。流终止 / 错误时 pipe 必关。
+//   3. 任何陈旧 init 帧（第 2+ 帧再发 init）视为协议违规 InvalidArgument。
+//
+// DownloadMedia (server streaming):
+//   1. 解析 account_key + 取 client。
+//   2. 调 media.Download，由 sidecar 把分片写入临时文件后逐块回传；
+//      chunkWriter 内部直接 stream.Send(&pb.DownloadMediaChunk{Chunk: ...})。
+//
+// 错误统一通过 mediaErrToStatus 映射；upload/download 共用同一表。
+
+func (g *gateway) SendMedia(stream pb.GatewayService_SendMediaServer) error {
+	defer recoverPanic("SendMedia")
+
+	// 第 1 帧必须是 init。
+	first, err := stream.Recv()
+	if err != nil {
+		return status.Errorf(codes.InvalidArgument, "media: failed to read first frame: %v", err)
+	}
+	init := first.GetInit()
+	if init == nil {
+		return status.Error(codes.InvalidArgument, "media: first frame must be init")
+	}
+
+	cli, err := g.clientFor(init.GetAccountKey())
+	if err != nil {
+		return err
+	}
+
+	// io.Pipe 把 stream.Recv 的 chunk 串起来喂给 media.Send。
+	// 关闭顺序：reader-goroutine 跑完时 CloseWithError(nil) -> writer 收 EOF。
+	// 任何 stream.Recv 错误 -> CloseWithError(err) -> media.Send io.Copy 立即停。
+	pr, pw := io.Pipe()
+
+	// reader goroutine: 把后续 chunk 帧泵入 pipe writer。
+	go func() {
+		for {
+			frame, recvErr := stream.Recv()
+			if recvErr == io.EOF {
+				_ = pw.Close()
+				return
+			}
+			if recvErr != nil {
+				_ = pw.CloseWithError(recvErr)
+				return
+			}
+			// 流的中段再发 init 是协议违规；用 InvalidArgument 关 pipe。
+			if frame.GetInit() != nil {
+				_ = pw.CloseWithError(status.Error(codes.InvalidArgument,
+					"media: unexpected init frame mid-stream"))
+				return
+			}
+			chunk := frame.GetChunk()
+			if len(chunk) == 0 {
+				continue // 空 chunk 视为 keep-alive；忽略。
+			}
+			if _, werr := pw.Write(chunk); werr != nil {
+				// pipe 已被 reader（media.Send）关闭，停止泵入。
+				return
+			}
+		}
+	}()
+
+	resp, err := g.media.Send(stream.Context(), cli, init, pr)
+	// media.Send 不关 reader；这里兜底关一次让 reader-goroutine 退出。
+	_ = pr.Close()
+	if err != nil {
+		return mediaErrToStatus(err, true)
+	}
+	return stream.SendAndClose(resp)
+}
+
+func (g *gateway) DownloadMedia(req *pb.DownloadMediaRequest, stream pb.GatewayService_DownloadMediaServer) error {
+	defer recoverPanic("DownloadMedia")
+
+	cli, err := g.clientFor(req.GetAccountKey())
+	if err != nil {
+		return err
+	}
+
+	chunkWriter := func(p []byte) error {
+		// media.Download 已经在 chunkWriter 调用前 copy 出独立 buffer，
+		// 这里直接把 slice 塞进 pb 即可，gRPC 序列化期间复用安全。
+		return stream.Send(&pb.DownloadMediaChunk{Chunk: p})
+	}
+
+	if err := g.media.Download(stream.Context(), cli, req.GetMedia(), chunkWriter); err != nil {
+		return mediaErrToStatus(err, false)
+	}
+	return nil
+}
+
+// mediaErrToStatus 把 internal/media + whatsmeow 媒体错误映射到 gRPC code。
+//
+// upload=true 表示来自 SendMedia 路径；upload=false 表示 DownloadMedia。
+// 两条路径共用大部分 sentinel，只有少数（如 ErrMissingDownloadInfo）只下行有意义。
+//
+// 映射规则：
+//   - 客户端入参错（init 缺/空字段/JID/kind/超限）         → INVALID_ARGUMENT
+//   - 客户端声明长度与实际收到的 chunk 总和不一致           → FAILED_PRECONDITION
+//     （区别于纯入参错；客户端可重发完整文件而不必改入参）
+//   - 服务端文件过大 / 资源不足                             → RESOURCE_EXHAUSTED
+//   - whatsmeow 校验失败（sha256 / hmac / enc sha256 / 截断） → DATA_LOSS
+//     （服务端拿到的字节与服务器声明的密钥/摘要不符；不可重试）
+//   - 其他（多为网络 / WebSocket 临时错误）                 → UNAVAILABLE
+func mediaErrToStatus(err error, upload bool) error {
+	_ = upload // 当前两路映射相同；保留参数留作未来分流。
+	switch {
+	case errors.Is(err, media.ErrMissingInitFrame),
+		errors.Is(err, media.ErrUnexpectedInitFrame),
+		errors.Is(err, media.ErrEmptyClientMsgID),
+		errors.Is(err, media.ErrEmptyToJID),
+		errors.Is(err, media.ErrInvalidJID),
+		errors.Is(err, media.ErrUnsupportedMediaKind),
+		errors.Is(err, media.ErrMissingMimeType),
+		errors.Is(err, media.ErrMissingDownloadInfo):
+		return status.Errorf(codes.InvalidArgument, "%v", err)
+	case errors.Is(err, media.ErrDeclaredLengthMismatch):
+		return status.Errorf(codes.FailedPrecondition, "%v", err)
+	case errors.Is(err, media.ErrMediaTooLarge):
+		return status.Errorf(codes.ResourceExhausted, "%v", err)
+	case errors.Is(err, whatsmeow.ErrFileLengthMismatch),
+		errors.Is(err, whatsmeow.ErrInvalidMediaSHA256),
+		errors.Is(err, whatsmeow.ErrInvalidMediaEncSHA256),
+		errors.Is(err, whatsmeow.ErrInvalidMediaHMAC),
+		errors.Is(err, whatsmeow.ErrTooShortFile):
+		return status.Errorf(codes.DataLoss, "%v", err)
+	case errors.Is(err, whatsmeow.ErrUnknownMediaType),
+		errors.Is(err, whatsmeow.ErrNoURLPresent):
 		return status.Errorf(codes.InvalidArgument, "%v", err)
 	default:
 		return status.Errorf(codes.Unavailable, "%v", err)
