@@ -4,6 +4,11 @@ modules:
 lint:
   use:
     - STANDARD
+  except:
+    # Phase 4.3: DownloadMedia returns a stream of DownloadMediaChunk frames.
+    # The "Chunk" suffix conveys the streaming-frame semantics far better than
+    # "DownloadMediaResponse" would; we deliberately deviate from STANDARD here.
+    - RPC_RESPONSE_STANDARD_NAME
 breaking:
   use:
     - FILE

@@ -35,6 +35,15 @@ class ChatPresenceMedia(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     CHAT_PRESENCE_MEDIA_UNSPECIFIED: _ClassVar[ChatPresenceMedia]
     CHAT_PRESENCE_MEDIA_TEXT: _ClassVar[ChatPresenceMedia]
     CHAT_PRESENCE_MEDIA_AUDIO: _ClassVar[ChatPresenceMedia]
+
+class MediaKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    MEDIA_KIND_UNSPECIFIED: _ClassVar[MediaKind]
+    MEDIA_KIND_IMAGE: _ClassVar[MediaKind]
+    MEDIA_KIND_VIDEO: _ClassVar[MediaKind]
+    MEDIA_KIND_AUDIO: _ClassVar[MediaKind]
+    MEDIA_KIND_DOCUMENT: _ClassVar[MediaKind]
+    MEDIA_KIND_STICKER: _ClassVar[MediaKind]
 RECEIPT_TYPE_UNSPECIFIED: ReceiptType
 RECEIPT_TYPE_DELIVERED: ReceiptType
 RECEIPT_TYPE_READ: ReceiptType
@@ -49,6 +58,12 @@ CHAT_PRESENCE_STATE_PAUSED: ChatPresenceState
 CHAT_PRESENCE_MEDIA_UNSPECIFIED: ChatPresenceMedia
 CHAT_PRESENCE_MEDIA_TEXT: ChatPresenceMedia
 CHAT_PRESENCE_MEDIA_AUDIO: ChatPresenceMedia
+MEDIA_KIND_UNSPECIFIED: MediaKind
+MEDIA_KIND_IMAGE: MediaKind
+MEDIA_KIND_VIDEO: MediaKind
+MEDIA_KIND_AUDIO: MediaKind
+MEDIA_KIND_DOCUMENT: MediaKind
+MEDIA_KIND_STICKER: MediaKind
 
 class PingRequest(_message.Message):
     __slots__ = ("client_protocol_version",)
@@ -191,7 +206,7 @@ class StreamEventsRequest(_message.Message):
     def __init__(self, include_soft_events: bool = ..., resume_after_seq: _Optional[int] = ...) -> None: ...
 
 class StreamEventsResponse(_message.Message):
-    __slots__ = ("seq", "sidecar_id", "account_key", "account_jid", "observed_at", "connected", "disconnected", "qr", "pair_success", "message", "logged_out", "joined_group", "group_info", "group_participant_update", "receipt", "presence", "chat_presence", "unknown")
+    __slots__ = ("seq", "sidecar_id", "account_key", "account_jid", "observed_at", "connected", "disconnected", "qr", "pair_success", "message", "logged_out", "joined_group", "group_info", "group_participant_update", "receipt", "presence", "chat_presence", "media_message", "unknown")
     SEQ_FIELD_NUMBER: _ClassVar[int]
     SIDECAR_ID_FIELD_NUMBER: _ClassVar[int]
     ACCOUNT_KEY_FIELD_NUMBER: _ClassVar[int]
@@ -209,6 +224,7 @@ class StreamEventsResponse(_message.Message):
     RECEIPT_FIELD_NUMBER: _ClassVar[int]
     PRESENCE_FIELD_NUMBER: _ClassVar[int]
     CHAT_PRESENCE_FIELD_NUMBER: _ClassVar[int]
+    MEDIA_MESSAGE_FIELD_NUMBER: _ClassVar[int]
     UNKNOWN_FIELD_NUMBER: _ClassVar[int]
     seq: int
     sidecar_id: str
@@ -227,8 +243,9 @@ class StreamEventsResponse(_message.Message):
     receipt: ReceiptEvent
     presence: PresenceEvent
     chat_presence: ChatPresenceEvent
+    media_message: MediaMessageEvent
     unknown: UnknownEvent
-    def __init__(self, seq: _Optional[int] = ..., sidecar_id: _Optional[str] = ..., account_key: _Optional[str] = ..., account_jid: _Optional[str] = ..., observed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., connected: _Optional[_Union[ConnectedEvent, _Mapping]] = ..., disconnected: _Optional[_Union[DisconnectedEvent, _Mapping]] = ..., qr: _Optional[_Union[QREvent, _Mapping]] = ..., pair_success: _Optional[_Union[PairSuccessEvent, _Mapping]] = ..., message: _Optional[_Union[MessageEvent, _Mapping]] = ..., logged_out: _Optional[_Union[LoggedOutEvent, _Mapping]] = ..., joined_group: _Optional[_Union[JoinedGroupEvent, _Mapping]] = ..., group_info: _Optional[_Union[GroupInfoEvent, _Mapping]] = ..., group_participant_update: _Optional[_Union[GroupParticipantUpdateEvent, _Mapping]] = ..., receipt: _Optional[_Union[ReceiptEvent, _Mapping]] = ..., presence: _Optional[_Union[PresenceEvent, _Mapping]] = ..., chat_presence: _Optional[_Union[ChatPresenceEvent, _Mapping]] = ..., unknown: _Optional[_Union[UnknownEvent, _Mapping]] = ...) -> None: ...
+    def __init__(self, seq: _Optional[int] = ..., sidecar_id: _Optional[str] = ..., account_key: _Optional[str] = ..., account_jid: _Optional[str] = ..., observed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., connected: _Optional[_Union[ConnectedEvent, _Mapping]] = ..., disconnected: _Optional[_Union[DisconnectedEvent, _Mapping]] = ..., qr: _Optional[_Union[QREvent, _Mapping]] = ..., pair_success: _Optional[_Union[PairSuccessEvent, _Mapping]] = ..., message: _Optional[_Union[MessageEvent, _Mapping]] = ..., logged_out: _Optional[_Union[LoggedOutEvent, _Mapping]] = ..., joined_group: _Optional[_Union[JoinedGroupEvent, _Mapping]] = ..., group_info: _Optional[_Union[GroupInfoEvent, _Mapping]] = ..., group_participant_update: _Optional[_Union[GroupParticipantUpdateEvent, _Mapping]] = ..., receipt: _Optional[_Union[ReceiptEvent, _Mapping]] = ..., presence: _Optional[_Union[PresenceEvent, _Mapping]] = ..., chat_presence: _Optional[_Union[ChatPresenceEvent, _Mapping]] = ..., media_message: _Optional[_Union[MediaMessageEvent, _Mapping]] = ..., unknown: _Optional[_Union[UnknownEvent, _Mapping]] = ...) -> None: ...
 
 class ConnectedEvent(_message.Message):
     __slots__ = ()
@@ -627,3 +644,119 @@ class ChatPresenceEvent(_message.Message):
     state: ChatPresenceState
     media: ChatPresenceMedia
     def __init__(self, chat_jid: _Optional[str] = ..., sender_jid: _Optional[str] = ..., state: _Optional[_Union[ChatPresenceState, str]] = ..., media: _Optional[_Union[ChatPresenceMedia, str]] = ...) -> None: ...
+
+class MediaInfo(_message.Message):
+    __slots__ = ("kind", "mime_type", "file_name", "file_length", "caption", "direct_path", "media_key", "file_sha256", "file_enc_sha256", "thumbnail_jpeg", "width", "height", "duration_seconds", "voice_note", "animated", "url")
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    MIME_TYPE_FIELD_NUMBER: _ClassVar[int]
+    FILE_NAME_FIELD_NUMBER: _ClassVar[int]
+    FILE_LENGTH_FIELD_NUMBER: _ClassVar[int]
+    CAPTION_FIELD_NUMBER: _ClassVar[int]
+    DIRECT_PATH_FIELD_NUMBER: _ClassVar[int]
+    MEDIA_KEY_FIELD_NUMBER: _ClassVar[int]
+    FILE_SHA256_FIELD_NUMBER: _ClassVar[int]
+    FILE_ENC_SHA256_FIELD_NUMBER: _ClassVar[int]
+    THUMBNAIL_JPEG_FIELD_NUMBER: _ClassVar[int]
+    WIDTH_FIELD_NUMBER: _ClassVar[int]
+    HEIGHT_FIELD_NUMBER: _ClassVar[int]
+    DURATION_SECONDS_FIELD_NUMBER: _ClassVar[int]
+    VOICE_NOTE_FIELD_NUMBER: _ClassVar[int]
+    ANIMATED_FIELD_NUMBER: _ClassVar[int]
+    URL_FIELD_NUMBER: _ClassVar[int]
+    kind: MediaKind
+    mime_type: str
+    file_name: str
+    file_length: int
+    caption: str
+    direct_path: str
+    media_key: bytes
+    file_sha256: bytes
+    file_enc_sha256: bytes
+    thumbnail_jpeg: bytes
+    width: int
+    height: int
+    duration_seconds: int
+    voice_note: bool
+    animated: bool
+    url: str
+    def __init__(self, kind: _Optional[_Union[MediaKind, str]] = ..., mime_type: _Optional[str] = ..., file_name: _Optional[str] = ..., file_length: _Optional[int] = ..., caption: _Optional[str] = ..., direct_path: _Optional[str] = ..., media_key: _Optional[bytes] = ..., file_sha256: _Optional[bytes] = ..., file_enc_sha256: _Optional[bytes] = ..., thumbnail_jpeg: _Optional[bytes] = ..., width: _Optional[int] = ..., height: _Optional[int] = ..., duration_seconds: _Optional[int] = ..., voice_note: bool = ..., animated: bool = ..., url: _Optional[str] = ...) -> None: ...
+
+class MediaMessageEvent(_message.Message):
+    __slots__ = ("message_id", "chat_jid", "sender_jid", "from_me", "timestamp", "is_group", "reply_to_message_id", "caption", "media")
+    MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    CHAT_JID_FIELD_NUMBER: _ClassVar[int]
+    SENDER_JID_FIELD_NUMBER: _ClassVar[int]
+    FROM_ME_FIELD_NUMBER: _ClassVar[int]
+    TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
+    IS_GROUP_FIELD_NUMBER: _ClassVar[int]
+    REPLY_TO_MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    CAPTION_FIELD_NUMBER: _ClassVar[int]
+    MEDIA_FIELD_NUMBER: _ClassVar[int]
+    message_id: str
+    chat_jid: str
+    sender_jid: str
+    from_me: bool
+    timestamp: _timestamp_pb2.Timestamp
+    is_group: bool
+    reply_to_message_id: str
+    caption: str
+    media: MediaInfo
+    def __init__(self, message_id: _Optional[str] = ..., chat_jid: _Optional[str] = ..., sender_jid: _Optional[str] = ..., from_me: bool = ..., timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., is_group: bool = ..., reply_to_message_id: _Optional[str] = ..., caption: _Optional[str] = ..., media: _Optional[_Union[MediaInfo, _Mapping]] = ...) -> None: ...
+
+class SendMediaInit(_message.Message):
+    __slots__ = ("account_key", "to_jid", "client_msg_id", "quoted_message_id", "kind", "mime_type", "file_name", "caption", "thumbnail_jpeg", "voice_note", "declared_file_length")
+    ACCOUNT_KEY_FIELD_NUMBER: _ClassVar[int]
+    TO_JID_FIELD_NUMBER: _ClassVar[int]
+    CLIENT_MSG_ID_FIELD_NUMBER: _ClassVar[int]
+    QUOTED_MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    KIND_FIELD_NUMBER: _ClassVar[int]
+    MIME_TYPE_FIELD_NUMBER: _ClassVar[int]
+    FILE_NAME_FIELD_NUMBER: _ClassVar[int]
+    CAPTION_FIELD_NUMBER: _ClassVar[int]
+    THUMBNAIL_JPEG_FIELD_NUMBER: _ClassVar[int]
+    VOICE_NOTE_FIELD_NUMBER: _ClassVar[int]
+    DECLARED_FILE_LENGTH_FIELD_NUMBER: _ClassVar[int]
+    account_key: str
+    to_jid: str
+    client_msg_id: str
+    quoted_message_id: str
+    kind: MediaKind
+    mime_type: str
+    file_name: str
+    caption: str
+    thumbnail_jpeg: bytes
+    voice_note: bool
+    declared_file_length: int
+    def __init__(self, account_key: _Optional[str] = ..., to_jid: _Optional[str] = ..., client_msg_id: _Optional[str] = ..., quoted_message_id: _Optional[str] = ..., kind: _Optional[_Union[MediaKind, str]] = ..., mime_type: _Optional[str] = ..., file_name: _Optional[str] = ..., caption: _Optional[str] = ..., thumbnail_jpeg: _Optional[bytes] = ..., voice_note: bool = ..., declared_file_length: _Optional[int] = ...) -> None: ...
+
+class SendMediaRequest(_message.Message):
+    __slots__ = ("init", "chunk")
+    INIT_FIELD_NUMBER: _ClassVar[int]
+    CHUNK_FIELD_NUMBER: _ClassVar[int]
+    init: SendMediaInit
+    chunk: bytes
+    def __init__(self, init: _Optional[_Union[SendMediaInit, _Mapping]] = ..., chunk: _Optional[bytes] = ...) -> None: ...
+
+class SendMediaResponse(_message.Message):
+    __slots__ = ("message_id", "server_timestamp", "deduped")
+    MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    SERVER_TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
+    DEDUPED_FIELD_NUMBER: _ClassVar[int]
+    message_id: str
+    server_timestamp: _timestamp_pb2.Timestamp
+    deduped: bool
+    def __init__(self, message_id: _Optional[str] = ..., server_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., deduped: bool = ...) -> None: ...
+
+class DownloadMediaRequest(_message.Message):
+    __slots__ = ("account_key", "media")
+    ACCOUNT_KEY_FIELD_NUMBER: _ClassVar[int]
+    MEDIA_FIELD_NUMBER: _ClassVar[int]
+    account_key: str
+    media: MediaInfo
+    def __init__(self, account_key: _Optional[str] = ..., media: _Optional[_Union[MediaInfo, _Mapping]] = ...) -> None: ...
+
+class DownloadMediaChunk(_message.Message):
+    __slots__ = ("chunk",)
+    CHUNK_FIELD_NUMBER: _ClassVar[int]
+    chunk: bytes
+    def __init__(self, chunk: _Optional[bytes] = ...) -> None: ...

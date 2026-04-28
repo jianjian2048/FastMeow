@@ -141,6 +141,16 @@ class GatewayServiceStub(object):
                 request_serializer=fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceRequest.SerializeToString,
                 response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceResponse.FromString,
                 _registered_method=True)
+        self.SendMedia = channel.stream_unary(
+                '/fastmeow.v1.GatewayService/SendMedia',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.SendMediaRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SendMediaResponse.FromString,
+                _registered_method=True)
+        self.DownloadMedia = channel.unary_stream(
+                '/fastmeow.v1.GatewayService/DownloadMedia',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.DownloadMediaRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.DownloadMediaChunk.FromString,
+                _registered_method=True)
         self.Shutdown = channel.unary_unary(
                 '/fastmeow.v1.GatewayService/Shutdown',
                 request_serializer=fastmeow_dot_v1_dot_gateway__pb2.ShutdownRequest.SerializeToString,
@@ -339,6 +349,44 @@ class GatewayServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def SendMedia(self, request_iterator, context):
+        """───────────────────────────────────────────────────────────────────────────
+        Media (Phase 4.3)
+        ───────────────────────────────────────────────────────────────────────────
+
+        媒体走流式 RPC 以避免 gRPC 默认 4MB 单包上限。
+        - SendMedia：客户端流式。第 1 帧必须是 SendMediaInit（携带元数据 +
+        幂等键 client_msg_id），后续帧均为 chunk bytes。sidecar 边收边
+        缓冲到内存（Phase 4.3 上限 100MB / whatsmeow 限制），收齐后调用
+        whatsmeow Upload + SendMessage(Image/Video/Audio/Document/Sticker)。
+        幂等性：(account_key, client_msg_id) 在去重窗口内已确认则返回缓存
+        SendMediaResponse 且 deduped=true，不重复上传。
+        - DownloadMedia：服务端流式。Python 拿 MediaInfo（来自之前接收的
+        MediaMessageEvent）发出请求，sidecar 调 whatsmeow Download 后
+        按固定 chunk 大小流式回传 bytes。
+
+        错误映射（与现有 RPC 相同基调）：
+        - JID 非法 / kind UNSPECIFIED → INVALID_ARGUMENT
+        - 账号未连接 → FAILED_PRECONDITION
+        - 媒体超限 / 文件大小不匹配 → RESOURCE_EXHAUSTED
+        - whatsmeow Upload/Download 失败 → UNAVAILABLE 并附带原始错误文本
+        - 媒体已过期 / key 失效 → NOT_FOUND
+
+        上传媒体并发送媒体消息。client streaming：第 1 帧 SendMediaInit
+        携带元数据，后续帧为 chunk bytes。sidecar 在收完所有 chunk 后
+        一次性回 SendMediaResponse。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DownloadMedia(self, request, context):
+        """下载之前接收到的媒体并以流式 chunk 回传给 Python。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def Shutdown(self, request, context):
         """请求优雅停机。sidecar 将：
         1. 停止接受新的 RPC。
@@ -452,6 +500,16 @@ def add_GatewayServiceServicer_to_server(servicer, server):
                     servicer.SubscribePresence,
                     request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceRequest.FromString,
                     response_serializer=fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceResponse.SerializeToString,
+            ),
+            'SendMedia': grpc.stream_unary_rpc_method_handler(
+                    servicer.SendMedia,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SendMediaRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.SendMediaResponse.SerializeToString,
+            ),
+            'DownloadMedia': grpc.unary_stream_rpc_method_handler(
+                    servicer.DownloadMedia,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.DownloadMediaRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.DownloadMediaChunk.SerializeToString,
             ),
             'Shutdown': grpc.unary_unary_rpc_method_handler(
                     servicer.Shutdown,
@@ -1006,6 +1064,60 @@ class GatewayService(object):
             '/fastmeow.v1.GatewayService/SubscribePresence',
             fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceRequest.SerializeToString,
             fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SendMedia(request_iterator,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.stream_unary(
+            request_iterator,
+            target,
+            '/fastmeow.v1.GatewayService/SendMedia',
+            fastmeow_dot_v1_dot_gateway__pb2.SendMediaRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.SendMediaResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DownloadMedia(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/DownloadMedia',
+            fastmeow_dot_v1_dot_gateway__pb2.DownloadMediaRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.DownloadMediaChunk.FromString,
             options,
             channel_credentials,
             insecure,

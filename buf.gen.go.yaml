@@ -1,0 +1,15 @@
+version: v2
+clean: true
+plugins:
+  # ─── Go only ─────────────────────────────────────────────────────
+  # Python pb2 仍由 scripts/regen_proto.py（grpc_tools.protoc）维护，
+  # 避免 buf 远程 plugin 与 grpc_tools 在格式细节上来回打架。
+  - remote: buf.build/protocolbuffers/go
+    out: gen/go
+    opt:
+      - paths=source_relative
+  - remote: buf.build/grpc/go
+    out: gen/go
+    opt:
+      - paths=source_relative
+      - require_unimplemented_servers=false
