@@ -50,7 +50,7 @@ import (
 // 每当传输协议（wire contract）发生破坏性变化时，协议版本（protocolVersion）就会提升。
 // Python 管理器在 Ping 时发送其预期版本；我们拒绝版本不匹配的请求，以防
 // 过时的 wheel 与较新的 sidecar（或反之）进行静默通信。
-const protocolVersion uint32 = 1
+const protocolVersion uint32 = 2
 
 // 编译时可注入的版本字符串。
 var (

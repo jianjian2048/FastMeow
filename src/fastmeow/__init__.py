@@ -93,7 +93,7 @@ from .types import (
     UnknownEvent,
 )
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 __all__ = [  # noqa: RUF022  -- 按领域分组，非字母序
     # 核心应用

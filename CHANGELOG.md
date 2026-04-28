@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-04-28
+
+Hotfix release for ``0.3.0``. The Phase 4.3 protocol bump was applied
+to the Python client (``PROTOCOL_VERSION = 2`` in
+``src/fastmeow/_transport.py``) but the matching change in the Go
+sidecar (``cmd/fastmeow-sidecar/main.go``) was missed. As a result, the
+``0.3.0`` wheel published to PyPI fails the handshake on first connect
+with ``SidecarStartupError: protocol version mismatch: client=2
+server=1``. Existing test coverage used a mock transport for ``Ping``
+and did not catch the regression.
+
+### Fixed
+
+- **Sidecar handshake**: bump ``protocolVersion`` in the Go sidecar
+  from ``1`` to ``2`` so it agrees with the Python client shipped in
+  ``0.3.0``. After upgrading to ``0.3.1`` the handshake succeeds and
+  Phase 4.3 media features work end-to-end.
+
+### Added
+
+- **Regression test** ``tests/test_sidecar_handshake.py``: launches the
+  real ``fastmeow-sidecar`` binary and asserts ``Ping`` succeeds with
+  the current ``PROTOCOL_VERSION`` and fails with ``mismatch`` for any
+  other value. This blocks future Go/Python protocol-version drift.
+
+### Notes
+
+- Users who installed ``0.3.0`` from PyPI must upgrade to ``0.3.1``;
+  ``0.3.0`` is non-functional in production.
+- No public API changes versus ``0.3.0``; this is a pure wire-protocol
+  fix.
+
 ## [0.3.0] - 2026-04-28
 
 Phase 4.3 — media messages. Adds outbound and inbound media support
@@ -184,7 +216,8 @@ automation SDK powered by an embedded `whatsmeow` Go sidecar.
 - Python 3.12+
 - No Go toolchain or C compiler required for end users.
 
-[Unreleased]: https://github.com/jianjian2048/FastMeow/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/jianjian2048/FastMeow/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/jianjian2048/FastMeow/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/jianjian2048/FastMeow/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/jianjian2048/FastMeow/compare/v0.1.0...v0.2.1
 [0.1.0]: https://github.com/jianjian2048/FastMeow/releases/tag/v0.1.0
