@@ -18,13 +18,15 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from datetime import datetime
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 from uuid import uuid4
 
 import grpc
 from google.protobuf.timestamp_pb2 import Timestamp
 
+from . import _media
 from ._generated.fastmeow.v1 import gateway_pb2 as pb
 from ._generated.fastmeow.v1 import gateway_pb2_grpc as pb_grpc
 from .exceptions import (
@@ -37,6 +39,11 @@ from .exceptions import (
     InvalidJIDError,
     InviteLinkInvalidError,
     InviteLinkRevokedError,
+    MediaCorruptedError,
+    MediaDownloadError,
+    MediaTooLargeError,
+    MediaUnsupportedTypeError,
+    MediaUploadError,
     MessageSendError,
     SidecarCrashedError,
     SidecarStartupError,
@@ -50,6 +57,8 @@ from .types import (
     GroupInfo,
     GroupParticipantAction,
     GroupParticipantUpdateResult,
+    Media,
+    MediaInfo,
     PresenceType,
     ReceiptType,
     SendResult,
@@ -80,6 +89,8 @@ RpcOp = Literal[
     "send_presence",
     "send_chat_presence",
     "subscribe_presence",
+    "send_media",
+    "download_media",
 ]
 
 # 上述群组 RPC 的集合，用于在 _translate 中识别群组操作。
@@ -101,8 +112,12 @@ if TYPE_CHECKING:
     pass
 
 
-# 第一阶段通信协议版本；当 proto 发生不兼容变更时增加。
-PROTOCOL_VERSION = 1
+# 通信协议版本。
+# 1 = Phase 1（文本消息 / 群组 / 回执 / 在线状态）。
+# 2 = Phase 4.3（在 1 的基础上叠加 SendMedia / DownloadMedia 流式 RPC
+#                 与 MediaMessageEvent；不删除任何既有 RPC 或字段）。
+# proto 发生不向后兼容的变更时再次递增。
+PROTOCOL_VERSION = 2
 
 # 一元 RPC 的默认截止时间（秒）。StreamEvents 没有截止时间。
 DEFAULT_DEADLINE = 30.0
@@ -163,6 +178,36 @@ def _translate(
             return GroupError(f"{op}: not found: {detail}")
         # 落到通用 GroupError（FAILED_PRECONDITION / INTERNAL 等）。
         return GroupError(f"{op}: {code.name}: {detail}")
+
+    # 媒体 RPC 的细化映射（在通用分支之前）。
+    # sidecar 的 ``mediaErrToStatus`` 已经把 Go 端的 sentinel 翻译为状态码，
+    # 这里再按 op + status 二次细分到 Python 异常子类。
+    if op in ("send_media", "download_media"):
+        if code == grpc.StatusCode.INVALID_ARGUMENT:
+            # ErrUnsupportedMediaKind / ErrMissingMimeType /
+            # ErrUnknownMediaType / ErrMissingDownloadInfo / 缺 JID 等。
+            if "jid" in detail.lower():
+                return InvalidJIDError(detail)
+            return MediaUnsupportedTypeError(f"{op}: {detail}")
+        if code == grpc.StatusCode.RESOURCE_EXHAUSTED:
+            # ErrMediaTooLarge —— 出站超过 sidecar 配置上限。
+            return MediaTooLargeError(detail)
+        if code == grpc.StatusCode.DATA_LOSS:
+            # whatsmeow 完整性校验失败：长度 / SHA-256 / HMAC 不匹配。
+            return MediaCorruptedError(detail)
+        if code == grpc.StatusCode.FAILED_PRECONDITION:
+            # ErrDeclaredLengthMismatch（出站）/ ErrNoURLPresent（入站）。
+            if op == "send_media":
+                return MediaUploadError(f"{op}: {detail}")
+            return MediaDownloadError(f"{op}: {detail}")
+        if code == grpc.StatusCode.NOT_FOUND:
+            # 仅可能来自 account_key 未注册；上面的通道级 UNAVAILABLE
+            # 已被早一段提前消费，所以这里安全。
+            return AccountNotFoundError(detail or (account_key or ""))
+        # 其余（INTERNAL 等）按上传 / 下载方向落到对应基类。
+        if op == "send_media":
+            return MediaUploadError(f"{op}: {code.name}: {detail}")
+        return MediaDownloadError(f"{op}: {code.name}: {detail}")
 
     # NOT_FOUND / ALREADY_EXISTS 在每个账号相关的 RPC 中都与账号有关。
     if code == grpc.StatusCode.NOT_FOUND:
@@ -609,6 +654,85 @@ class Transport:
             raise _translate(
                 exc, op="subscribe_presence", account_key=account_key
             ) from exc
+
+    # -- 媒体 RPC（Phase 4.3） --------------------------------------------
+
+    async def send_media(
+        self,
+        *,
+        account_key: str,
+        to_jid: str,
+        media: Media,
+        client_msg_id: str | None = None,
+        quoted_message_id: str = "",
+    ) -> SendResult:
+        """流式上传媒体并发送对应的 WhatsApp 消息。
+
+        实现细节：
+
+        * 使用 client streaming（``SendMedia``）：先 1 帧 ``init`` 携带元信息，
+          然后若干 256 KiB ``chunk``。所有装配交给 :mod:`._media`。
+        * ``client_msg_id`` 是上传幂等键。省略时由 FastMeow 生成 UUID4；
+          想在重连时保留幂等性请显式传入。
+        * 截止时间：媒体上传可能远超普通 RPC 的 30 秒 ——
+          Phase 4.3 暂不强制 deadline，让 sidecar 决定何时放弃。
+          后续如出现长尾再加可配阈值。
+        """
+        effective_client_msg_id = client_msg_id or str(uuid4())
+        try:
+            resp: pb.SendMediaResponse = await self._stub.SendMedia(
+                _media.iter_send_requests(
+                    account_key=account_key,
+                    to_jid=to_jid,
+                    media=media,
+                    client_msg_id=effective_client_msg_id,
+                    quoted_message_id=quoted_message_id,
+                ),
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(exc, op="send_media", account_key=account_key) from exc
+        return SendResult(
+            message_id=resp.message_id,
+            server_timestamp=resp.server_timestamp.ToDatetime(tzinfo=UTC),
+            deduped=resp.deduped,
+        )
+
+    async def download_media(
+        self,
+        *,
+        account_key: str,
+        info: MediaInfo,
+    ) -> bytes:
+        """下载媒体并以 ``bytes`` 返回完整内容。
+
+        适用于小到中等尺寸的载荷；大文件请优先使用
+        :meth:`download_media_to`，避免单次内存峰值。
+        """
+        request = _media.build_download_request(account_key=account_key, info=info)
+        call: AsyncIterator[pb.DownloadMediaChunk] = self._stub.DownloadMedia(request)
+        try:
+            return await _media.collect_download(call)
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(exc, op="download_media", account_key=account_key) from exc
+
+    async def download_media_to(
+        self,
+        *,
+        account_key: str,
+        info: MediaInfo,
+        path: str | Path,
+    ) -> Path:
+        """流式下载媒体到 ``path``，返回最终路径。
+
+        IO 卸载到工作线程；失败时半成品文件会被尽力清理（清理失败被吞掉，
+        以免掩盖原异常）。父目录必须已存在。
+        """
+        request = _media.build_download_request(account_key=account_key, info=info)
+        call: AsyncIterator[pb.DownloadMediaChunk] = self._stub.DownloadMedia(request)
+        try:
+            return await _media.write_download_to(call, path)
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(exc, op="download_media", account_key=account_key) from exc
 
     async def shutdown(self, *, grace_ms: int = 0) -> None:
         """请求 sidecar 清理运行中的 RPC 并退出。

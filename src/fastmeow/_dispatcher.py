@@ -26,6 +26,7 @@ import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 from .context import AccountClient, Ctx
 from .exceptions import BackpressureError
@@ -37,6 +38,8 @@ from .types import (
     GroupInfo,
     GroupParticipantAction,
     GroupParticipantUpdateResult,
+    Media,
+    MediaInfo,
     PresenceType,
     ReceiptType,
     SendResult,
@@ -244,6 +247,40 @@ class _BoundClient:
         await self._transport.subscribe_presence(
             account_key=self.account_key,
             jid=jid,
+        )
+
+    # -- 媒体（Phase 4.3 内部转发；公开 send_image/* / Ctx.reply_image/*
+    # 留 Batch 5。这里命名带下划线前缀，刻意不进入 :class:`AccountClient`
+    # Protocol —— 避免在 Phase 4.3 的中间状态把仍在打磨的 API 形状外泄。
+    async def _send_media(
+        self,
+        to_jid: str,
+        media: Media,
+        *,
+        client_msg_id: str | None = None,
+        quoted_message_id: str = "",
+    ) -> SendResult:
+        return await self._transport.send_media(
+            account_key=self.account_key,
+            to_jid=to_jid,
+            media=media,
+            client_msg_id=client_msg_id,
+            quoted_message_id=quoted_message_id,
+        )
+
+    async def _download_media(self, info: MediaInfo) -> bytes:
+        return await self._transport.download_media(
+            account_key=self.account_key,
+            info=info,
+        )
+
+    async def _download_media_to(
+        self, info: MediaInfo, path: str | Path
+    ) -> Path:
+        return await self._transport.download_media_to(
+            account_key=self.account_key,
+            info=info,
+            path=path,
         )
 
 

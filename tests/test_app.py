@@ -615,7 +615,7 @@ async def test_start_rolls_back_when_dispatcher_start_fails(
             return 0
 
     class _FakeTransport:
-        protocol_version = 1
+        protocol_version = 2
         sidecar_version = "test"
         whatsmeow_version = "test"
         sidecar_id = "sc-test"

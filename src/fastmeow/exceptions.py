@@ -189,3 +189,59 @@ class GroupPermissionError(GroupError):
     ``ErrNotInGroup`` / ``ErrGroupInviteLinkUnauthorized`` →
     ``PERMISSION_DENIED``。
     """
+
+
+# ---------------------------------------------------------------------------
+# 媒体（Phase 4.3）
+# ---------------------------------------------------------------------------
+
+
+class MediaError(FastMeowError):
+    """媒体发送 / 下载失败的基类。
+
+    所有媒体相关 RPC（``SendMedia`` / ``DownloadMedia``）的失败都最终落到
+    此类或其子类。sidecar 用 gRPC 状态码区分细类，Python 端根据 ``op`` +
+    status code 进一步细化（参见 ``_transport._translate``）。
+    """
+
+
+class MediaUploadError(MediaError):
+    """通过校验后上传 / 外发媒体仍然失败。
+
+    覆盖 sidecar ``ErrDeclaredLengthMismatch`` 以及上传 / 发送阶段的瞬时
+    失败（``UNAVAILABLE`` / ``INTERNAL``）。
+    """
+
+
+class MediaDownloadError(MediaError):
+    """无法从 WhatsApp 拉取入站媒体。
+
+    覆盖 sidecar ``ErrMissingDownloadInfo`` / whatsmeow ``ErrNoURLPresent``
+    以及下载阶段的瞬时网络失败（``UNAVAILABLE`` / ``INTERNAL``）。
+    """
+
+
+class MediaTooLargeError(MediaError):
+    """媒体超过 FastMeow / WhatsApp 的尺寸上限。
+
+    出站可能在客户端预校验时抛出，或由 sidecar ``ErrMediaTooLarge`` →
+    ``RESOURCE_EXHAUSTED`` 翻译而来。
+    """
+
+
+class MediaUnsupportedTypeError(MediaError):
+    """不支持或含糊不清的媒体类型 / MIME 组合。
+
+    例如 ``MediaKind.UNSPECIFIED``、``bytes`` 输入未显式提供 MIME，或
+    sidecar ``ErrUnsupportedMediaKind`` / ``ErrMissingMimeType`` /
+    whatsmeow ``ErrUnknownMediaType`` → ``INVALID_ARGUMENT``。
+    """
+
+
+class MediaCorruptedError(MediaError):
+    """下载的媒体未通过完整性校验。
+
+    覆盖 whatsmeow ``ErrFileLengthMismatch`` / ``ErrInvalidMediaSHA256`` /
+    ``ErrInvalidMediaEncSHA256`` / ``ErrInvalidMediaHMAC`` /
+    ``ErrTooShortFile`` → ``DATA_LOSS``。
+    """
