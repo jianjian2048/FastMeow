@@ -81,6 +81,7 @@ from .types import (
     Media,
     MediaInfo,
     MediaKind,
+    MediaSource,
     MessageEvent,
     PairSuccessEvent,
     PresenceEvent,
@@ -135,6 +136,7 @@ __all__ = [  # noqa: RUF022  -- 按领域分组，非字母序
     "Media",
     "MediaInfo",
     "MediaKind",
+    "MediaSource",
     # 回执 / 在线状态
     "ReceiptType",
     "PresenceType",

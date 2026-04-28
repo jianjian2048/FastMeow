@@ -180,6 +180,37 @@ class MessageEvent(_EventBase):
     def is_reply(self) -> bool:
         return bool(self.reply_to_message_id)
 
+    # 媒体便捷谓词（Phase 4.3） ------------------------------------
+    # 这些纯属为 ``F.has_media`` / ``F.is_image`` 等魔法过滤器服务：
+    # ``F`` 仅做属性读取，于是把判定收口在事件对象本身就能让 filters
+    # 引擎保持零结构改动。每个谓词都对 ``media is None`` 做短路，未来
+    # 即便消息子类型扩张，纯文本消息也永远是 ``False``。
+
+    @property
+    def has_media(self) -> bool:
+        """是否携带媒体载荷（与 ``text`` 互斥）。"""
+        return self.media is not None
+
+    @property
+    def is_image(self) -> bool:
+        return self.media is not None and self.media.kind is MediaKind.IMAGE
+
+    @property
+    def is_video(self) -> bool:
+        return self.media is not None and self.media.kind is MediaKind.VIDEO
+
+    @property
+    def is_audio(self) -> bool:
+        return self.media is not None and self.media.kind is MediaKind.AUDIO
+
+    @property
+    def is_document(self) -> bool:
+        return self.media is not None and self.media.kind is MediaKind.DOCUMENT
+
+    @property
+    def is_sticker(self) -> bool:
+        return self.media is not None and self.media.kind is MediaKind.STICKER
+
 
 @dataclass(frozen=True, slots=True)
 class ConnectedEvent(_EventBase):

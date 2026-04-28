@@ -39,7 +39,7 @@ from typing import IO, TYPE_CHECKING
 
 from ._generated.fastmeow.v1 import gateway_pb2 as pb
 from .exceptions import MediaUnsupportedTypeError
-from .types import Media, MediaKind
+from .types import Media, MediaKind, MediaSource
 
 if TYPE_CHECKING:
     from .types import MediaInfo
@@ -250,4 +250,88 @@ def build_download_request(
             animated=info.animated,
             url=info.url,
         ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Typed convenience adapters (Phase 4.3 Batch 5)
+# ---------------------------------------------------------------------------
+#
+# The public ``send_image`` / ``send_video`` / ``send_audio`` / ``send_document``
+# / ``send_sticker`` helpers all delegate here. We keep the module-level
+# constructor table and the ``build_media`` factory private (no underscore-free
+# re-exports) so the ``Media`` dataclass remains the single authoritative
+# wire-shape; the typed wrappers are pure ergonomics.
+#
+# MIME defaults follow the most common WhatsApp-side encodings:
+# * IMAGE   -> ``image/jpeg``  (most camera roll uploads land as JPEG)
+# * VIDEO   -> ``video/mp4``
+# * AUDIO   -> ``audio/ogg; codecs=opus`` for voice notes (PTT requirement),
+#              ``audio/mpeg`` otherwise.
+# * DOC     -> ``application/octet-stream`` (caller usually overrides)
+# * STICKER -> ``image/webp``
+#
+# We deliberately do NOT call ``mimetypes.guess_type`` to keep the SDK free of
+# implicit OS-dependent behavior; the caller may always pass ``mime_type=``
+# explicitly to override the default.
+
+_DEFAULT_MIME: dict[MediaKind, str] = {
+    MediaKind.IMAGE: "image/jpeg",
+    MediaKind.VIDEO: "video/mp4",
+    MediaKind.AUDIO: "audio/mpeg",
+    MediaKind.DOCUMENT: "application/octet-stream",
+    MediaKind.STICKER: "image/webp",
+}
+
+_VOICE_NOTE_MIME = "audio/ogg; codecs=opus"
+
+
+def _default_file_name(source: MediaSource) -> str:
+    """Best-effort filename extraction for ``DOCUMENT``-style payloads.
+
+    Path-like sources fall back to ``Path(...).name``; bytes-like sources
+    cannot infer a name and return ``""`` -- callers must pass ``file_name=``
+    explicitly when sending a document from memory.
+    """
+    if isinstance(source, (str, os.PathLike)):
+        return Path(os.fspath(source)).name
+    return ""
+
+
+def build_media(
+    kind: MediaKind,
+    source: MediaSource,
+    *,
+    mime_type: str | None = None,
+    file_name: str | None = None,
+    caption: str = "",
+    thumbnail: bytes | None = None,
+    voice_note: bool = False,
+) -> Media:
+    """Construct a :class:`Media` instance for typed convenience senders.
+
+    This is the single funnel through which ``send_image`` / ``send_video`` /
+    ``send_audio`` / ``send_document`` / ``send_sticker`` must pass. Keeping
+    one constructor here means default-MIME / default-filename policy is
+    centralized and trivially auditable.
+    """
+    if kind == MediaKind.UNSPECIFIED:
+        raise MediaUnsupportedTypeError(
+            "build_media requires a concrete MediaKind, not UNSPECIFIED"
+        )
+    if kind == MediaKind.AUDIO and voice_note and mime_type is None:
+        resolved_mime = _VOICE_NOTE_MIME
+    else:
+        resolved_mime = mime_type if mime_type is not None else _DEFAULT_MIME[kind]
+    resolved_name = (
+        file_name if file_name is not None else _default_file_name(source)
+    )
+    return Media(
+        kind=kind,
+        source=source,
+        mime_type=resolved_mime,
+        file_name=resolved_name,
+        caption=caption,
+        thumbnail=thumbnail if thumbnail is not None else b"",
+        voice_note=voice_note,
     )

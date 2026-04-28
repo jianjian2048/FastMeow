@@ -33,6 +33,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 from fastmeow.exceptions import ReplyNotAvailableError
@@ -42,6 +43,9 @@ from fastmeow.types import (
     Event,
     GroupInfo,
     GroupParticipantUpdateResult,
+    Media,
+    MediaInfo,
+    MediaSource,
     MessageEvent,
     PresenceType,
     ReceiptType,
@@ -202,6 +206,120 @@ class AccountClient(Protocol):
         """
         ...
 
+    # -- 媒体（Phase 4.3） ---------------------------------------------
+    # 设计要点：
+    # * 类型化的 send_image / send_video / send_audio / send_document /
+    #   send_sticker 是“便捷外壳”——它们各自构造合适的 :class:`Media`
+    #   并最终走到 :meth:`send_media`。这使得 SDK 用户无需手工记忆
+    #   ``MediaKind`` 与 mime/sticker/voice 的细节，符合 plan §2.2 的
+    #   显式 UX 偏好。
+    # * 通用 :meth:`send_media` 仍保留为高级逃生口（自定义 mime、
+    #   传 ``Media`` 已构造完成等场景）。
+
+    async def send_media(
+        self,
+        to_jid: str,
+        media: Media,
+        *,
+        client_msg_id: str | None = None,
+        quoted_message_id: str | None = None,
+    ) -> SendResult:
+        """发送任意 :class:`Media`；通用底层方法。
+
+        ``client_msg_id`` 用于上传幂等；不传时由 SDK 自动生成 UUIDv4。
+        """
+        ...
+
+    async def send_image(
+        self,
+        to_jid: str,
+        source: MediaSource,
+        *,
+        caption: str = "",
+        mime_type: str | None = None,
+        thumbnail: bytes | None = None,
+        client_msg_id: str | None = None,
+        quoted_message_id: str | None = None,
+    ) -> SendResult:
+        """发送图片消息。
+
+        ``source`` 接受 ``bytes`` / ``bytearray`` / ``memoryview`` /
+        路径字符串 / ``os.PathLike``；从路径读取时会启用线程池避免阻塞事件循环。
+        ``mime_type`` 不传时根据扩展名推断（路径输入），bytes 输入未指定时
+        默认 ``image/jpeg``。
+        """
+        ...
+
+    async def send_video(
+        self,
+        to_jid: str,
+        source: MediaSource,
+        *,
+        caption: str = "",
+        mime_type: str | None = None,
+        thumbnail: bytes | None = None,
+        client_msg_id: str | None = None,
+        quoted_message_id: str | None = None,
+    ) -> SendResult:
+        """发送视频消息。常规 mime 默认为 ``video/mp4``。"""
+        ...
+
+    async def send_audio(
+        self,
+        to_jid: str,
+        source: MediaSource,
+        *,
+        mime_type: str | None = None,
+        voice_note: bool = False,
+        client_msg_id: str | None = None,
+        quoted_message_id: str | None = None,
+    ) -> SendResult:
+        """发送音频消息。
+
+        ``voice_note=True`` 走 PTT（push-to-talk）通道；mime 默认为
+        ``audio/ogg; codecs=opus``（语音条）或 ``audio/mpeg``（普通音频）。
+        """
+        ...
+
+    async def send_document(
+        self,
+        to_jid: str,
+        source: MediaSource,
+        *,
+        file_name: str | None = None,
+        caption: str = "",
+        mime_type: str | None = None,
+        client_msg_id: str | None = None,
+        quoted_message_id: str | None = None,
+    ) -> SendResult:
+        """发送文档。``file_name`` 缺省时用路径 basename；bytes 输入必须显式指定。"""
+        ...
+
+    async def send_sticker(
+        self,
+        to_jid: str,
+        source: MediaSource,
+        *,
+        mime_type: str | None = None,
+        client_msg_id: str | None = None,
+        quoted_message_id: str | None = None,
+    ) -> SendResult:
+        """发送贴纸（缺省 mime 为 ``image/webp``）。"""
+        ...
+
+    async def download_media(self, media: MediaInfo) -> bytes:
+        """把 ``MessageEvent.media`` 描述的入站媒体下载到内存。
+
+        小到中等尺寸适用；大文件优先用 :meth:`download_media_to`。
+        """
+        ...
+
+    async def download_media_to(
+        self, media: MediaInfo, path: str | Path
+    ) -> Path:
+        """流式下载到 ``path`` 并返回最终路径。父目录必须已存在。"""
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class Ctx:
@@ -271,6 +389,139 @@ class Ctx:
             text,
             client_msg_id=client_msg_id,
         )
+
+    # -- 媒体便捷方法（Phase 4.3 Batch 5） ----------------------------------
+    # ``reply_*`` 系列与 :meth:`reply` 形状对齐：仅 :class:`MessageEvent`
+    # 上下文允许调用，缺省自动引用源消息（quoted=True 行为内置），底层一律
+    # 走 ``ctx.client.send_<kind>``。这保证了 ``ctx.reply()`` 与
+    # ``ctx.reply_image()`` 在语义上完全可互换 —— 用户不必记住两个心智模型。
+    #
+    # 下载侧（:meth:`download_media` / :meth:`download_media_to`）则不做事件类型
+    # 守卫：插件代码常在非消息事件里下载先前缓存的 :class:`MediaInfo`（例如
+    # 后台任务），而上下文本身只是 :class:`AccountClient` 的薄包装。
+
+    def _require_message_event(self, op: str) -> MessageEvent:
+        if not isinstance(self.event, MessageEvent):
+            raise ReplyNotAvailableError(
+                f"ctx.{op}() is only available for MessageEvent handlers; "
+                f"this ctx wraps {type(self.event).__name__}. "
+                f"Use ctx.client.send_<kind>(jid, ...) instead."
+            )
+        return self.event
+
+    async def reply_image(
+        self,
+        source: MediaSource,
+        *,
+        caption: str = "",
+        mime_type: str | None = None,
+        thumbnail: bytes | None = None,
+        client_msg_id: str | None = None,
+        quoted: bool = True,
+    ) -> SendResult:
+        """以图片回复源消息。``quoted=True`` 默认引用源消息。"""
+        msg = self._require_message_event("reply_image")
+        return await self.client.send_image(
+            msg.chat_jid,
+            source,
+            caption=caption,
+            mime_type=mime_type,
+            thumbnail=thumbnail,
+            client_msg_id=client_msg_id,
+            quoted_message_id=msg.message_id if quoted else None,
+        )
+
+    async def reply_video(
+        self,
+        source: MediaSource,
+        *,
+        caption: str = "",
+        mime_type: str | None = None,
+        thumbnail: bytes | None = None,
+        client_msg_id: str | None = None,
+        quoted: bool = True,
+    ) -> SendResult:
+        """以视频回复源消息。"""
+        msg = self._require_message_event("reply_video")
+        return await self.client.send_video(
+            msg.chat_jid,
+            source,
+            caption=caption,
+            mime_type=mime_type,
+            thumbnail=thumbnail,
+            client_msg_id=client_msg_id,
+            quoted_message_id=msg.message_id if quoted else None,
+        )
+
+    async def reply_audio(
+        self,
+        source: MediaSource,
+        *,
+        mime_type: str | None = None,
+        voice_note: bool = False,
+        client_msg_id: str | None = None,
+        quoted: bool = True,
+    ) -> SendResult:
+        """以音频回复源消息；``voice_note=True`` 走 PTT 通道。"""
+        msg = self._require_message_event("reply_audio")
+        return await self.client.send_audio(
+            msg.chat_jid,
+            source,
+            mime_type=mime_type,
+            voice_note=voice_note,
+            client_msg_id=client_msg_id,
+            quoted_message_id=msg.message_id if quoted else None,
+        )
+
+    async def reply_document(
+        self,
+        source: MediaSource,
+        *,
+        file_name: str | None = None,
+        caption: str = "",
+        mime_type: str | None = None,
+        client_msg_id: str | None = None,
+        quoted: bool = True,
+    ) -> SendResult:
+        """以文档回复源消息。bytes 输入需显式指定 ``file_name``。"""
+        msg = self._require_message_event("reply_document")
+        return await self.client.send_document(
+            msg.chat_jid,
+            source,
+            file_name=file_name,
+            caption=caption,
+            mime_type=mime_type,
+            client_msg_id=client_msg_id,
+            quoted_message_id=msg.message_id if quoted else None,
+        )
+
+    async def reply_sticker(
+        self,
+        source: MediaSource,
+        *,
+        mime_type: str | None = None,
+        client_msg_id: str | None = None,
+        quoted: bool = True,
+    ) -> SendResult:
+        """以贴纸回复源消息（缺省 mime ``image/webp``）。"""
+        msg = self._require_message_event("reply_sticker")
+        return await self.client.send_sticker(
+            msg.chat_jid,
+            source,
+            mime_type=mime_type,
+            client_msg_id=client_msg_id,
+            quoted_message_id=msg.message_id if quoted else None,
+        )
+
+    async def download_media(self, media: MediaInfo) -> bytes:
+        """下载入站媒体到内存；任意上下文可用。"""
+        return await self.client.download_media(media)
+
+    async def download_media_to(
+        self, media: MediaInfo, path: str | Path
+    ) -> Path:
+        """流式下载入站媒体到 ``path``；父目录必须已存在。"""
+        return await self.client.download_media_to(media, path)
 
     # -- 内省辅助属性 --------------------------------------------
 

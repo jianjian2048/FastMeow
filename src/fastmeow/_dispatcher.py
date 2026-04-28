@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from ._media import build_media
 from .context import AccountClient, Ctx
 from .exceptions import BackpressureError
 from .router import Router
@@ -40,6 +41,8 @@ from .types import (
     GroupParticipantUpdateResult,
     Media,
     MediaInfo,
+    MediaKind,
+    MediaSource,
     PresenceType,
     ReceiptType,
     SendResult,
@@ -249,37 +252,164 @@ class _BoundClient:
             jid=jid,
         )
 
-    # -- 媒体（Phase 4.3 内部转发；公开 send_image/* / Ctx.reply_image/*
-    # 留 Batch 5。这里命名带下划线前缀，刻意不进入 :class:`AccountClient`
-    # Protocol —— 避免在 Phase 4.3 的中间状态把仍在打磨的 API 形状外泄。
-    async def _send_media(
+    # -- 媒体（Phase 4.3 Batch 5：公开 API） -----------------------------
+    # 通用入口 :meth:`send_media` 与 5 个 typed 便捷方法
+    # （send_image / send_video / send_audio / send_document / send_sticker）
+    # 形成两层：
+    #   - typed 层只做参数收集 + ``build_media`` 适配，把所有走线逻辑
+    #     委派给 :meth:`send_media`，从而保证默认 MIME / file_name 策略
+    #     的单一来源。
+    #   - 通用层对接 ``Transport.send_media``。
+    # 下载侧仅暴露通用 :meth:`download_media` / :meth:`download_media_to`，
+    # 因为 :class:`MediaInfo` 已经携带 kind 信息，无须 typed 变体。
+
+    async def send_media(
         self,
         to_jid: str,
         media: Media,
         *,
         client_msg_id: str | None = None,
-        quoted_message_id: str = "",
+        quoted_message_id: str | None = None,
     ) -> SendResult:
         return await self._transport.send_media(
             account_key=self.account_key,
             to_jid=to_jid,
             media=media,
             client_msg_id=client_msg_id,
+            quoted_message_id=quoted_message_id or "",
+        )
+
+    async def send_image(
+        self,
+        to_jid: str,
+        source: MediaSource,
+        *,
+        caption: str = "",
+        mime_type: str | None = None,
+        thumbnail: bytes | None = None,
+        client_msg_id: str | None = None,
+        quoted_message_id: str | None = None,
+    ) -> SendResult:
+        media = build_media(
+            MediaKind.IMAGE,
+            source,
+            mime_type=mime_type,
+            caption=caption,
+            thumbnail=thumbnail,
+        )
+        return await self.send_media(
+            to_jid,
+            media,
+            client_msg_id=client_msg_id,
             quoted_message_id=quoted_message_id,
         )
 
-    async def _download_media(self, info: MediaInfo) -> bytes:
-        return await self._transport.download_media(
-            account_key=self.account_key,
-            info=info,
+    async def send_video(
+        self,
+        to_jid: str,
+        source: MediaSource,
+        *,
+        caption: str = "",
+        mime_type: str | None = None,
+        thumbnail: bytes | None = None,
+        client_msg_id: str | None = None,
+        quoted_message_id: str | None = None,
+    ) -> SendResult:
+        media = build_media(
+            MediaKind.VIDEO,
+            source,
+            mime_type=mime_type,
+            caption=caption,
+            thumbnail=thumbnail,
+        )
+        return await self.send_media(
+            to_jid,
+            media,
+            client_msg_id=client_msg_id,
+            quoted_message_id=quoted_message_id,
         )
 
-    async def _download_media_to(
-        self, info: MediaInfo, path: str | Path
+    async def send_audio(
+        self,
+        to_jid: str,
+        source: MediaSource,
+        *,
+        mime_type: str | None = None,
+        voice_note: bool = False,
+        client_msg_id: str | None = None,
+        quoted_message_id: str | None = None,
+    ) -> SendResult:
+        media = build_media(
+            MediaKind.AUDIO,
+            source,
+            mime_type=mime_type,
+            voice_note=voice_note,
+        )
+        return await self.send_media(
+            to_jid,
+            media,
+            client_msg_id=client_msg_id,
+            quoted_message_id=quoted_message_id,
+        )
+
+    async def send_document(
+        self,
+        to_jid: str,
+        source: MediaSource,
+        *,
+        file_name: str | None = None,
+        caption: str = "",
+        mime_type: str | None = None,
+        client_msg_id: str | None = None,
+        quoted_message_id: str | None = None,
+    ) -> SendResult:
+        media = build_media(
+            MediaKind.DOCUMENT,
+            source,
+            mime_type=mime_type,
+            file_name=file_name,
+            caption=caption,
+        )
+        return await self.send_media(
+            to_jid,
+            media,
+            client_msg_id=client_msg_id,
+            quoted_message_id=quoted_message_id,
+        )
+
+    async def send_sticker(
+        self,
+        to_jid: str,
+        source: MediaSource,
+        *,
+        mime_type: str | None = None,
+        client_msg_id: str | None = None,
+        quoted_message_id: str | None = None,
+    ) -> SendResult:
+        media = build_media(
+            MediaKind.STICKER,
+            source,
+            mime_type=mime_type,
+        )
+        return await self.send_media(
+            to_jid,
+            media,
+            client_msg_id=client_msg_id,
+            quoted_message_id=quoted_message_id,
+        )
+
+    async def download_media(self, media: MediaInfo) -> bytes:
+        return await self._transport.download_media(
+            account_key=self.account_key,
+            info=media,
+        )
+
+    async def download_media_to(
+        self, media: MediaInfo, path: str | Path
     ) -> Path:
         return await self._transport.download_media_to(
             account_key=self.account_key,
-            info=info,
+            info=media,
             path=path,
         )
 
