@@ -147,8 +147,11 @@ jobs:
           bin_files = [n for n in names if n.startswith('fastmeow/_bin/')]
           assert bin_files, 'no _bin/ files found in wheel'
           print('Bundled sidecar:', bin_files)
-          # Confirm WHEEL metadata is correct.
-          meta = z.read('fastmeow-0.1.0.dist-info/WHEEL').decode()
+          # Confirm WHEEL metadata is correct. Look up the dist-info dir
+          # dynamically so this stays version-agnostic across releases.
+          wheel_meta_names = [n for n in names if n.endswith('.dist-info/WHEEL')]
+          assert len(wheel_meta_names) == 1, f'expected exactly one WHEEL metadata file, got {wheel_meta_names!r}'
+          meta = z.read(wheel_meta_names[0]).decode()
           assert 'Tag: py3-none-${{ matrix.platform_tag }}' in meta, meta
           assert 'Root-Is-Purelib: false' in meta, meta
           print('WHEEL metadata OK')
