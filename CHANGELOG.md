@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-28
+
+Phase 4.3 — media messages. Adds outbound and inbound media support
+(image / video / audio / document / sticker) with streaming upload and
+download between Python and the embedded Go sidecar. The wire format
+gains a new ``SendMedia`` client-streaming RPC, a ``DownloadMedia``
+server-streaming RPC, and a ``MediaMessageEvent`` oneof on
+``StreamEventsResponse``. ``protocolVersion`` is bumped from ``1`` to
+``2``; older ``0.2.x`` clients can still connect against the new
+sidecar at the protocol level (no breaking changes to existing RPCs)
+but will not see media events.
+
+### Added
+
+- **Typed send helpers** on ``AccountClient`` (and forwarded on
+  ``Ctx``):
+  - ``send_image`` / ``send_video`` / ``send_audio`` /
+    ``send_document`` / ``send_sticker``.
+  - Mirror ``Ctx.reply_image`` / ``reply_video`` / ``reply_audio`` /
+    ``reply_document`` / ``reply_sticker`` for inline replies that
+    automatically quote the source ``MessageEvent``.
+  - Generic ``send_media`` accepting a fully-built ``Media`` for
+    advanced use cases.
+- **Inbound media** on ``MessageEvent``:
+  - New optional fields ``caption`` and ``media`` (a ``MediaInfo``).
+  - Predicates ``has_media``, ``is_image``, ``is_video``, ``is_audio``,
+    ``is_document``, ``is_sticker`` for routing.
+  - ``F.has_media`` / ``F.is_image`` / ``F.is_video`` / ``F.is_audio``
+    / ``F.is_document`` / ``F.is_sticker`` magic-filter shortcuts.
+- **Lazy download helpers**:
+  - ``download_media(MediaInfo)`` — collect into ``bytes``.
+  - ``download_media_to(MediaInfo, path)`` — stream straight to disk
+    (256 KiB chunks; partial files are cleaned up on failure).
+  - Available on both ``AccountClient`` and ``Ctx`` (download is not
+    gated to ``MessageEvent`` contexts).
+- **Domain types** exported from ``fastmeow``: ``Media``, ``MediaInfo``,
+  ``MediaKind``, ``MediaSource``.
+- **Exceptions**: ``MediaError`` base + ``MediaUnsupportedTypeError``,
+  ``MediaUploadError``, ``MediaDownloadError``,
+  ``MediaSizeLimitError`` for sidecar-side and validation failures.
+- **Example**: ``examples/media_bot.py`` — sends images / documents /
+  voice notes on command and archives all inbound media to disk.
+
+### Changed
+
+- ``protocolVersion`` handshake bumped from ``1`` to ``2``. Existing
+  ``0.2.x`` Python clients can still complete the handshake against the
+  new sidecar; they will simply ignore unknown ``MediaMessageEvent``
+  frames.
+- ``MessageEvent`` now carries optional ``caption`` and ``media``
+  metadata. Existing handlers that ignore these fields are unaffected.
+- ``__version__`` in ``fastmeow/__init__.py`` is now in lockstep with
+  ``pyproject.toml`` (was previously stale at ``"0.1.0"``).
+- ``README.md`` Public API section expanded to cover the new media
+  surface.
+
+### Fixed
+
+- Pure media messages (no caption) are no longer silently dropped by
+  the event translator — they now arrive as ``MessageEvent`` with
+  ``media`` populated and an empty ``text`` body.
+
+### Internal
+
+- New Go package ``internal/media`` (whatsmeow ``Upload`` /
+  ``Download`` wrappers, 88% coverage).
+- New Python module ``fastmeow/_media.py`` (256 KiB streaming
+  assembler; zero intermediate buffering for bytes-like sources).
+- Test suite: **186 → 217+** unit tests; new ``tests/test_media.py``
+  (55 tests) covers the assembler, the typed send helpers, the
+  ``Ctx.reply_*`` guards, ``MessageEvent`` predicates, ``F``
+  shortcuts, and the proto round-trip.
+
 ## [0.2.1] - 2026-04-28
 
 Phase 4.1 (groups) and Phase 4.2 (receipts & presence) bundled into a
@@ -111,6 +184,7 @@ automation SDK powered by an embedded `whatsmeow` Go sidecar.
 - Python 3.12+
 - No Go toolchain or C compiler required for end users.
 
-[Unreleased]: https://github.com/jianjian2048/FastMeow/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/jianjian2048/FastMeow/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/jianjian2048/FastMeow/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/jianjian2048/FastMeow/compare/v0.1.0...v0.2.1
 [0.1.0]: https://github.com/jianjian2048/FastMeow/releases/tag/v0.1.0
