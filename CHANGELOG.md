@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-04-28
+
+Phase 4.1 (groups) and Phase 4.2 (receipts & presence) bundled into a
+single patch release. `protocolVersion` remains `1`; the sidecar wire
+format is fully backward-compatible with `0.1.0` clients.
+
+### Added
+
+- **Group management** (Phase 4.1) — 9 new RPCs on `AccountClient`:
+  - Read: `list_groups`, `get_group_info`, `preview_group_invite`.
+  - Write: `create_group`, `set_group_name`, `set_group_topic`,
+    `add_group_participants`, `remove_group_participants`,
+    `promote_group_participants`, `demote_group_participants`,
+    `get_group_invite_link`, `join_group`, `leave_group`.
+  - Domain types: `GroupInfo`, `GroupParticipant`,
+    `GroupParticipantAction`, `GroupParticipantUpdateResult`.
+  - Events: `GroupInfoEvent`, `JoinedGroupEvent`, `GroupParticipantUpdateEvent`.
+  - Router: `@router.on_group_info`, `@router.on_joined_group`,
+    `@router.on_group_participants`.
+  - Exceptions: `GroupError`, `GroupNotFoundError`,
+    `NotInGroupError`, `NotGroupAdminError`, `InviteLinkInvalidError`,
+    `InviteLinkRevokedError`.
+
+- **Receipts & presence** (Phase 4.2) — 4 new RPCs and 3 new events:
+  - RPCs: `mark_read`, `send_presence`, `send_chat_presence`,
+    `subscribe_presence`.
+  - Events: `ReceiptEvent`, `PresenceEvent`, `ChatPresenceEvent`.
+  - Enums: `ReceiptType`, `PresenceType`, `ChatPresenceState`,
+    `ChatPresenceMedia`.
+  - Router: `@router.on_receipt`, `@router.on_presence`,
+    `@router.on_chat_presence`.
+  - Soft-event introspection: the dispatcher automatically requests
+    receipts / presence / chat-presence from the sidecar only when the
+    application registers at least one matching handler. No opt-in flag
+    is required.
+
+### Changed
+
+- `Router` now exposes `has_soft_event_handlers()` (used internally to
+  drive `StreamEvents.IncludeSoftEvents`; safe for advanced users).
+- README "Public API at a glance" expanded to cover the new surfaces.
+- New examples: `examples/group_admin.py`, `examples/typing_indicator.py`.
+
+### Internal
+
+- Go: new `internal/groups` (Phase 4.1, 80%+ coverage),
+  `internal/receipts` (87% cov), `internal/presence` (88% cov).
+- Test suite grew from **117** (0.1.0) to **186** unit tests; Go test
+  suite covers all new converters and handlers.
+
 ## [0.1.0] - 2026-04-27
 
 Initial public release. FastMeow is a Pythonic, async-native WhatsApp
@@ -61,5 +111,6 @@ automation SDK powered by an embedded `whatsmeow` Go sidecar.
 - Python 3.12+
 - No Go toolchain or C compiler required for end users.
 
-[Unreleased]: https://github.com/jianjian2048/FastMeow/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/jianjian2048/FastMeow/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/jianjian2048/FastMeow/compare/v0.1.0...v0.2.1
 [0.1.0]: https://github.com/jianjian2048/FastMeow/releases/tag/v0.1.0

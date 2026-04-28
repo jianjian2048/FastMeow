@@ -12,9 +12,11 @@ Pythonic、原生异步的 WhatsApp 自动化 SDK，由内嵌的 whatsmeow Go si
 
 ## 状态
 - **Alpha**：项目处于早期开发阶段。
-- **阶段 1+2**：Go sidecar 和 Python SDK 已发布并经过验证。
-- **CI 已验证**：多平台 wheel 包已通过自动化流水线测试（mypy strict、ruff、117+ 测试）。
-- **分发**：已发布到 [PyPI](https://pypi.org/project/fastmeow/)。
+- **阶段 1+2+3**：Go sidecar、Python SDK、多平台发布流水线均已发布并经过验证。
+- **阶段 4.1 ✅**：群组管理 —— 9 个 RPC 与 3 个事件。
+- **阶段 4.2 ✅**：回执与在线状态 —— 4 个 RPC 与 3 个事件，软事件按需自动开关。
+- **CI 已验证**：多平台 wheel 包已通过自动化流水线测试（mypy strict、ruff、186 项测试）。
+- **分发**：已发布到 [PyPI](https://pypi.org/project/fastmeow/)（最新版本：`0.2.1`）。
 
 ## 安装
 ```bash
@@ -154,9 +156,16 @@ async with FastMeow(session_dir=session_dir) as app:
 - **核心 (Core)**：`FastMeow`, `AccountHandle`
 - **路由 (Routing)**：`Router`, `SkipHandler`, `F`, `Filter`, `FilterResult`
 - **上下文 (Context)**：`Ctx`, `AccountClient`
-- **事件 (Events)**：`Event`, `MessageEvent`, `ConnectedEvent`, `DisconnectedEvent`, `QREvent`, `PairSuccessEvent`, `LoggedOutEvent`, `UnknownEvent`
-- **领域 (Domain)**：`Account`, `AccountState`, `SendResult`
-- **异常 (Exceptions)**：`FastMeowError`, `ConfigurationError`, `AccountError`, `AccountAlreadyExistsError`, `AccountNotFoundError`, `MessagingError`, `MessageSendError`, `InvalidJIDError`, `ReplyNotAvailableError`, `PairingFailedError`, `PairingTimeoutError`, `SidecarError`, `SidecarStartupError`, `SidecarCrashedError`, `SidecarBinaryNotFoundError`, `TransportError`, `ManifestError`, `DispatchError`, `BackpressureError`, `HandlerSignatureError`
+- **事件 (Events)**：`Event`, `MessageEvent`, `ConnectedEvent`, `DisconnectedEvent`, `QREvent`, `PairSuccessEvent`, `LoggedOutEvent`, `UnknownEvent`, `GroupInfoEvent`, `JoinedGroupEvent`, `GroupParticipantUpdateEvent`, `ReceiptEvent`, `PresenceEvent`, `ChatPresenceEvent`
+- **领域 (Domain)**：`Account`, `AccountState`, `SendResult`, `GroupInfo`, `GroupParticipant`, `GroupParticipantAction`, `GroupParticipantUpdateResult`, `ReceiptType`, `PresenceType`, `ChatPresenceState`, `ChatPresenceMedia`
+- **异常 (Exceptions)**：`FastMeowError`, `ConfigurationError`, `AccountError`, `AccountAlreadyExistsError`, `AccountNotFoundError`, `MessagingError`, `MessageSendError`, `InvalidJIDError`, `ReplyNotAvailableError`, `PairingFailedError`, `PairingTimeoutError`, `SidecarError`, `SidecarStartupError`, `SidecarCrashedError`, `SidecarBinaryNotFoundError`, `TransportError`, `ManifestError`, `DispatchError`, `BackpressureError`, `HandlerSignatureError`, `GroupError`, `GroupNotFoundError`, `NotInGroupError`, `NotGroupAdminError`, `InviteLinkInvalidError`, `InviteLinkRevokedError`
+
+`AccountClient`（通过 `handle.client` 或 `ctx.client` 获取）提供：
+
+- **消息**：`send_text`、`send_reply`、`mark_read`
+- **在线状态**：`send_presence`、`send_chat_presence`、`subscribe_presence`
+- **群组（只读）**：`list_groups`、`get_group_info`、`preview_group_invite`
+- **群组（写）**：`create_group`、`set_group_name`、`set_group_topic`、`set_group_announce`、`set_group_locked`、`add_group_participants`、`remove_group_participants`、`promote_group_participants`、`demote_group_participants`、`get_group_invite_link`、`join_group`、`leave_group`
 
 ## 支持的平台
 FastMeow 为以下平台提供预编译的 sidecar 二进制文件：
@@ -168,13 +177,15 @@ FastMeow 为以下平台提供预编译的 sidecar 二进制文件：
 
 ## 路线图
 - **阶段 3 ✅**：发布流水线和多平台 wheel 包自动化。
-- **v0.1.0 ✅**：正式发布到 PyPI。
-- **近期计划**：
-  - 扩展事件类型（状态、回执）。
-  - 群组管理功能。
+- **v0.1.0 ✅**：首次发布到 PyPI。
+- **阶段 4.1 ✅**：群组管理。
+- **阶段 4.2 ✅**：回执与在线状态（输入指示、已读回执）。
+- **v0.2.1 ✅**：阶段 4.1 + 4.2 已发布到 PyPI。
+- **下一步**：
+  - 阶段 4.3：媒体消息（图片、视频、音频、文档、贴纸）。
 - **远期计划**：
-  - 媒体消息支持（图片、视频）。
   - 高级会话管理 UI。
+  - Worker / Broker 部署拓扑。
 
 ## 开发
 设置本地开发环境：

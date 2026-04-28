@@ -12,9 +12,11 @@ Pythonic, async-native WhatsApp automation SDK powered by an embedded whatsmeow 
 
 ## Status
 - **Alpha**: Project is in early development.
-- **Phase 1+2**: Go sidecar and Python SDK are shipped and verified.
-- **CI Verified**: Multi-platform wheels are tested via automated pipelines (mypy strict, ruff, 117+ tests).
-- **Distribution**: Available on [PyPI](https://pypi.org/project/fastmeow/).
+- **Phase 1+2+3**: Go sidecar, Python SDK, and the multi-platform release pipeline are shipped and verified.
+- **Phase 4.1 ✅**: Group management — 9 RPCs and 3 events.
+- **Phase 4.2 ✅**: Receipts and presence — 4 RPCs and 3 events, with automatic soft-event introspection.
+- **CI Verified**: Multi-platform wheels are tested via automated pipelines (mypy strict, ruff, 186 tests).
+- **Distribution**: Available on [PyPI](https://pypi.org/project/fastmeow/) (latest: `0.2.1`).
 
 ## Installation
 ```bash
@@ -154,9 +156,16 @@ Top-level exports from `fastmeow`:
 - **Core**: `FastMeow`, `AccountHandle`
 - **Routing**: `Router`, `SkipHandler`, `F`, `Filter`, `FilterResult`
 - **Context**: `Ctx`, `AccountClient`
-- **Events**: `Event`, `MessageEvent`, `ConnectedEvent`, `DisconnectedEvent`, `QREvent`, `PairSuccessEvent`, `LoggedOutEvent`, `UnknownEvent`
-- **Domain**: `Account`, `AccountState`, `SendResult`
-- **Exceptions**: `FastMeowError`, `ConfigurationError`, `AccountError`, `AccountAlreadyExistsError`, `AccountNotFoundError`, `MessagingError`, `MessageSendError`, `InvalidJIDError`, `ReplyNotAvailableError`, `PairingFailedError`, `PairingTimeoutError`, `SidecarError`, `SidecarStartupError`, `SidecarCrashedError`, `SidecarBinaryNotFoundError`, `TransportError`, `ManifestError`, `DispatchError`, `BackpressureError`, `HandlerSignatureError`
+- **Events**: `Event`, `MessageEvent`, `ConnectedEvent`, `DisconnectedEvent`, `QREvent`, `PairSuccessEvent`, `LoggedOutEvent`, `UnknownEvent`, `GroupInfoEvent`, `JoinedGroupEvent`, `GroupParticipantUpdateEvent`, `ReceiptEvent`, `PresenceEvent`, `ChatPresenceEvent`
+- **Domain**: `Account`, `AccountState`, `SendResult`, `GroupInfo`, `GroupParticipant`, `GroupParticipantAction`, `GroupParticipantUpdateResult`, `ReceiptType`, `PresenceType`, `ChatPresenceState`, `ChatPresenceMedia`
+- **Exceptions**: `FastMeowError`, `ConfigurationError`, `AccountError`, `AccountAlreadyExistsError`, `AccountNotFoundError`, `MessagingError`, `MessageSendError`, `InvalidJIDError`, `ReplyNotAvailableError`, `PairingFailedError`, `PairingTimeoutError`, `SidecarError`, `SidecarStartupError`, `SidecarCrashedError`, `SidecarBinaryNotFoundError`, `TransportError`, `ManifestError`, `DispatchError`, `BackpressureError`, `HandlerSignatureError`, `GroupError`, `GroupNotFoundError`, `NotInGroupError`, `NotGroupAdminError`, `InviteLinkInvalidError`, `InviteLinkRevokedError`
+
+`AccountClient` (available as `handle.client` or `ctx.client`) exposes:
+
+- **Messaging**: `send_text`, `send_reply`, `mark_read`
+- **Presence**: `send_presence`, `send_chat_presence`, `subscribe_presence`
+- **Groups (read)**: `list_groups`, `get_group_info`, `preview_group_invite`
+- **Groups (write)**: `create_group`, `set_group_name`, `set_group_topic`, `set_group_announce`, `set_group_locked`, `add_group_participants`, `remove_group_participants`, `promote_group_participants`, `demote_group_participants`, `get_group_invite_link`, `join_group`, `leave_group`
 
 ## Supported platforms
 FastMeow provides pre-compiled sidecar binaries for:
@@ -168,13 +177,15 @@ Requirements: Python 3.12+.
 
 ## Roadmap
 - **Phase 3 ✅**: Release pipeline and multi-platform wheel automation.
-- **v0.1.0 ✅**: Published to PyPI.
-- **Near-term**:
-  - Expanded event types (presence, receipts).
-  - Group management features.
+- **v0.1.0 ✅**: Initial PyPI release.
+- **Phase 4.1 ✅**: Group management.
+- **Phase 4.2 ✅**: Receipts and presence (typing indicators, read receipts).
+- **v0.2.1 ✅**: Phase 4.1 + 4.2 published to PyPI.
+- **Next**:
+  - Phase 4.3: Media messages (images, video, audio, documents, stickers).
 - **Deferred**:
-  - Media message support (images, video).
   - Advanced session management UI.
+  - Worker / Broker deployment topology.
 
 ## Development
 To set up a local development environment:
