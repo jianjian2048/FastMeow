@@ -15,8 +15,9 @@ Pythonic, async-native WhatsApp automation SDK powered by an embedded whatsmeow 
 - **Phase 1+2+3**: Go sidecar, Python SDK, and the multi-platform release pipeline are shipped and verified.
 - **Phase 4.1 ✅**: Group management — 9 RPCs and 3 events.
 - **Phase 4.2 ✅**: Receipts and presence — 4 RPCs and 3 events, with automatic soft-event introspection.
-- **CI Verified**: Multi-platform wheels are tested via automated pipelines (mypy strict, ruff, 186 tests).
-- **Distribution**: Available on [PyPI](https://pypi.org/project/fastmeow/) (latest: `0.2.1`).
+- **Phase 4.3 ✅**: Media messages — 5 typed send helpers (image/video/audio/document/sticker) + inbound `MediaInfo` + streaming upload/download between Python and the Go sidecar.
+- **CI Verified**: Multi-platform wheels are tested via automated pipelines (mypy strict, ruff, 244 tests).
+- **Distribution**: Available on [PyPI](https://pypi.org/project/fastmeow/) (latest: `0.3.1`).
 
 ## Installation
 ```bash
@@ -181,8 +182,10 @@ Requirements: Python 3.12+.
 - **Phase 4.1 ✅**: Group management.
 - **Phase 4.2 ✅**: Receipts and presence (typing indicators, read receipts).
 - **v0.2.1 ✅**: Phase 4.1 + 4.2 published to PyPI.
+- **Phase 4.3 ✅**: Media messages (images, video, audio, documents, stickers).
+- **v0.3.1 ✅**: Phase 4.3 published to PyPI (hotfix for `0.3.0` protocol bump).
 - **Next**:
-  - Phase 4.3: Media messages (images, video, audio, documents, stickers).
+  - Phase 5: Reactions, edits, revokes, and delete-for-me notifications (v0.4.0).
 - **Deferred**:
   - Advanced session management UI.
   - Worker / Broker deployment topology.
