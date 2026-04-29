@@ -27,7 +27,7 @@ classifiers = [
 ]
 dependencies = [
     "grpcio>=1.68",
-    "protobuf>=6.31,<7",
+    "protobuf>=6.31,<8",
     "pydantic>=2.9",
     "qrcode>=7.4",
 ]
@@ -44,7 +44,7 @@ Changelog = "https://github.com/jianjian2048/FastMeow/blob/main/CHANGELOG.md"
 
 [dependency-groups]
 dev = [
-    "grpcio-tools>=1.74,<2",
+    "grpcio-tools>=1.74",
     "mypy>=1.13",
     "pytest>=8.3",
     "pytest-asyncio>=0.24",

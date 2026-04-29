@@ -141,6 +141,21 @@ class GatewayServiceStub(object):
                 request_serializer=fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceRequest.SerializeToString,
                 response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceResponse.FromString,
                 _registered_method=True)
+        self.SendReaction = channel.unary_unary(
+                '/fastmeow.v1.GatewayService/SendReaction',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.SendReactionRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SendReactionResponse.FromString,
+                _registered_method=True)
+        self.SendEdit = channel.unary_unary(
+                '/fastmeow.v1.GatewayService/SendEdit',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.SendEditRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SendEditResponse.FromString,
+                _registered_method=True)
+        self.SendRevoke = channel.unary_unary(
+                '/fastmeow.v1.GatewayService/SendRevoke',
+                request_serializer=fastmeow_dot_v1_dot_gateway__pb2.SendRevokeRequest.SerializeToString,
+                response_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SendRevokeResponse.FromString,
+                _registered_method=True)
         self.SendMedia = channel.stream_unary(
                 '/fastmeow.v1.GatewayService/SendMedia',
                 request_serializer=fastmeow_dot_v1_dot_gateway__pb2.SendMediaRequest.SerializeToString,
@@ -349,6 +364,42 @@ class GatewayServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def SendReaction(self, request, context):
+        """───────────────────────────────────────────────────────────────────────────
+        Reactions / Edits / Revokes (Phase 5)
+        ───────────────────────────────────────────────────────────────────────────
+
+        三个元操作 RPC 都不接 idempotency 缓存（首版 Deduped 始终为 false）：
+        whatsmeow 内部以 target_message_id 作为 stanza key，重发由 WhatsApp 自行去重。
+
+        错误映射：
+        - chat_jid / target_message_id 空，或 JID 非法 → INVALID_ARGUMENT
+        - account_key 未注册 → NOT_FOUND
+        - 其它（whatsmeow 业务错误 / 网络）→ INTERNAL，error_message 透传原始文本
+
+        对一条消息发送 reaction（emoji 为空字符串表示取消反应）。
+        target_sender_jid 在 DM 中可空（whatsmeow 自行从 chat_jid 推断），
+        群聊里加给他人消息时必须传被反应消息的发送者 JID。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SendEdit(self, request, context):
+        """编辑一条已发送消息的文本。whatsmeow EditWindow=20min，超时由 WhatsApp 拒绝。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SendRevoke(self, request, context):
+        """撤回一条消息。target_sender_jid 在群聊管理员撤回他人消息时必须传被撤回者 JID；
+        自己撤回自己消息可空（whatsmeow 内部用 EmptyJID 标记 FromMe=true）。
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def SendMedia(self, request_iterator, context):
         """───────────────────────────────────────────────────────────────────────────
         Media (Phase 4.3)
@@ -500,6 +551,21 @@ def add_GatewayServiceServicer_to_server(servicer, server):
                     servicer.SubscribePresence,
                     request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceRequest.FromString,
                     response_serializer=fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceResponse.SerializeToString,
+            ),
+            'SendReaction': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendReaction,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SendReactionRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.SendReactionResponse.SerializeToString,
+            ),
+            'SendEdit': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendEdit,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SendEditRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.SendEditResponse.SerializeToString,
+            ),
+            'SendRevoke': grpc.unary_unary_rpc_method_handler(
+                    servicer.SendRevoke,
+                    request_deserializer=fastmeow_dot_v1_dot_gateway__pb2.SendRevokeRequest.FromString,
+                    response_serializer=fastmeow_dot_v1_dot_gateway__pb2.SendRevokeResponse.SerializeToString,
             ),
             'SendMedia': grpc.stream_unary_rpc_method_handler(
                     servicer.SendMedia,
@@ -1064,6 +1130,87 @@ class GatewayService(object):
             '/fastmeow.v1.GatewayService/SubscribePresence',
             fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceRequest.SerializeToString,
             fastmeow_dot_v1_dot_gateway__pb2.SubscribePresenceResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SendReaction(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/SendReaction',
+            fastmeow_dot_v1_dot_gateway__pb2.SendReactionRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.SendReactionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SendEdit(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/SendEdit',
+            fastmeow_dot_v1_dot_gateway__pb2.SendEditRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.SendEditResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SendRevoke(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/fastmeow.v1.GatewayService/SendRevoke',
+            fastmeow_dot_v1_dot_gateway__pb2.SendRevokeRequest.SerializeToString,
+            fastmeow_dot_v1_dot_gateway__pb2.SendRevokeResponse.FromString,
             options,
             channel_credentials,
             insecure,

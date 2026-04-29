@@ -206,7 +206,7 @@ class StreamEventsRequest(_message.Message):
     def __init__(self, include_soft_events: bool = ..., resume_after_seq: _Optional[int] = ...) -> None: ...
 
 class StreamEventsResponse(_message.Message):
-    __slots__ = ("seq", "sidecar_id", "account_key", "account_jid", "observed_at", "connected", "disconnected", "qr", "pair_success", "message", "logged_out", "joined_group", "group_info", "group_participant_update", "receipt", "presence", "chat_presence", "media_message", "unknown")
+    __slots__ = ("seq", "sidecar_id", "account_key", "account_jid", "observed_at", "connected", "disconnected", "qr", "pair_success", "message", "logged_out", "joined_group", "group_info", "group_participant_update", "receipt", "presence", "chat_presence", "media_message", "unknown", "reaction", "message_edit", "message_revoke", "message_delete_for_me")
     SEQ_FIELD_NUMBER: _ClassVar[int]
     SIDECAR_ID_FIELD_NUMBER: _ClassVar[int]
     ACCOUNT_KEY_FIELD_NUMBER: _ClassVar[int]
@@ -226,6 +226,10 @@ class StreamEventsResponse(_message.Message):
     CHAT_PRESENCE_FIELD_NUMBER: _ClassVar[int]
     MEDIA_MESSAGE_FIELD_NUMBER: _ClassVar[int]
     UNKNOWN_FIELD_NUMBER: _ClassVar[int]
+    REACTION_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_EDIT_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_REVOKE_FIELD_NUMBER: _ClassVar[int]
+    MESSAGE_DELETE_FOR_ME_FIELD_NUMBER: _ClassVar[int]
     seq: int
     sidecar_id: str
     account_key: str
@@ -245,7 +249,11 @@ class StreamEventsResponse(_message.Message):
     chat_presence: ChatPresenceEvent
     media_message: MediaMessageEvent
     unknown: UnknownEvent
-    def __init__(self, seq: _Optional[int] = ..., sidecar_id: _Optional[str] = ..., account_key: _Optional[str] = ..., account_jid: _Optional[str] = ..., observed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., connected: _Optional[_Union[ConnectedEvent, _Mapping]] = ..., disconnected: _Optional[_Union[DisconnectedEvent, _Mapping]] = ..., qr: _Optional[_Union[QREvent, _Mapping]] = ..., pair_success: _Optional[_Union[PairSuccessEvent, _Mapping]] = ..., message: _Optional[_Union[MessageEvent, _Mapping]] = ..., logged_out: _Optional[_Union[LoggedOutEvent, _Mapping]] = ..., joined_group: _Optional[_Union[JoinedGroupEvent, _Mapping]] = ..., group_info: _Optional[_Union[GroupInfoEvent, _Mapping]] = ..., group_participant_update: _Optional[_Union[GroupParticipantUpdateEvent, _Mapping]] = ..., receipt: _Optional[_Union[ReceiptEvent, _Mapping]] = ..., presence: _Optional[_Union[PresenceEvent, _Mapping]] = ..., chat_presence: _Optional[_Union[ChatPresenceEvent, _Mapping]] = ..., media_message: _Optional[_Union[MediaMessageEvent, _Mapping]] = ..., unknown: _Optional[_Union[UnknownEvent, _Mapping]] = ...) -> None: ...
+    reaction: ReactionEvent
+    message_edit: MessageEditEvent
+    message_revoke: MessageRevokeEvent
+    message_delete_for_me: MessageDeleteForMeEvent
+    def __init__(self, seq: _Optional[int] = ..., sidecar_id: _Optional[str] = ..., account_key: _Optional[str] = ..., account_jid: _Optional[str] = ..., observed_at: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., connected: _Optional[_Union[ConnectedEvent, _Mapping]] = ..., disconnected: _Optional[_Union[DisconnectedEvent, _Mapping]] = ..., qr: _Optional[_Union[QREvent, _Mapping]] = ..., pair_success: _Optional[_Union[PairSuccessEvent, _Mapping]] = ..., message: _Optional[_Union[MessageEvent, _Mapping]] = ..., logged_out: _Optional[_Union[LoggedOutEvent, _Mapping]] = ..., joined_group: _Optional[_Union[JoinedGroupEvent, _Mapping]] = ..., group_info: _Optional[_Union[GroupInfoEvent, _Mapping]] = ..., group_participant_update: _Optional[_Union[GroupParticipantUpdateEvent, _Mapping]] = ..., receipt: _Optional[_Union[ReceiptEvent, _Mapping]] = ..., presence: _Optional[_Union[PresenceEvent, _Mapping]] = ..., chat_presence: _Optional[_Union[ChatPresenceEvent, _Mapping]] = ..., media_message: _Optional[_Union[MediaMessageEvent, _Mapping]] = ..., unknown: _Optional[_Union[UnknownEvent, _Mapping]] = ..., reaction: _Optional[_Union[ReactionEvent, _Mapping]] = ..., message_edit: _Optional[_Union[MessageEditEvent, _Mapping]] = ..., message_revoke: _Optional[_Union[MessageRevokeEvent, _Mapping]] = ..., message_delete_for_me: _Optional[_Union[MessageDeleteForMeEvent, _Mapping]] = ...) -> None: ...
 
 class ConnectedEvent(_message.Message):
     __slots__ = ()
@@ -760,3 +768,131 @@ class DownloadMediaChunk(_message.Message):
     CHUNK_FIELD_NUMBER: _ClassVar[int]
     chunk: bytes
     def __init__(self, chunk: _Optional[bytes] = ...) -> None: ...
+
+class SendReactionRequest(_message.Message):
+    __slots__ = ("account_key", "chat_jid", "target_message_id", "target_sender_jid", "emoji")
+    ACCOUNT_KEY_FIELD_NUMBER: _ClassVar[int]
+    CHAT_JID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_SENDER_JID_FIELD_NUMBER: _ClassVar[int]
+    EMOJI_FIELD_NUMBER: _ClassVar[int]
+    account_key: str
+    chat_jid: str
+    target_message_id: str
+    target_sender_jid: str
+    emoji: str
+    def __init__(self, account_key: _Optional[str] = ..., chat_jid: _Optional[str] = ..., target_message_id: _Optional[str] = ..., target_sender_jid: _Optional[str] = ..., emoji: _Optional[str] = ...) -> None: ...
+
+class SendReactionResponse(_message.Message):
+    __slots__ = ("message_id", "server_timestamp", "deduped")
+    MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    SERVER_TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
+    DEDUPED_FIELD_NUMBER: _ClassVar[int]
+    message_id: str
+    server_timestamp: _timestamp_pb2.Timestamp
+    deduped: bool
+    def __init__(self, message_id: _Optional[str] = ..., server_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., deduped: bool = ...) -> None: ...
+
+class SendEditRequest(_message.Message):
+    __slots__ = ("account_key", "chat_jid", "target_message_id", "new_text")
+    ACCOUNT_KEY_FIELD_NUMBER: _ClassVar[int]
+    CHAT_JID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    NEW_TEXT_FIELD_NUMBER: _ClassVar[int]
+    account_key: str
+    chat_jid: str
+    target_message_id: str
+    new_text: str
+    def __init__(self, account_key: _Optional[str] = ..., chat_jid: _Optional[str] = ..., target_message_id: _Optional[str] = ..., new_text: _Optional[str] = ...) -> None: ...
+
+class SendEditResponse(_message.Message):
+    __slots__ = ("message_id", "server_timestamp", "deduped")
+    MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    SERVER_TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
+    DEDUPED_FIELD_NUMBER: _ClassVar[int]
+    message_id: str
+    server_timestamp: _timestamp_pb2.Timestamp
+    deduped: bool
+    def __init__(self, message_id: _Optional[str] = ..., server_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., deduped: bool = ...) -> None: ...
+
+class SendRevokeRequest(_message.Message):
+    __slots__ = ("account_key", "chat_jid", "target_message_id", "target_sender_jid")
+    ACCOUNT_KEY_FIELD_NUMBER: _ClassVar[int]
+    CHAT_JID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_SENDER_JID_FIELD_NUMBER: _ClassVar[int]
+    account_key: str
+    chat_jid: str
+    target_message_id: str
+    target_sender_jid: str
+    def __init__(self, account_key: _Optional[str] = ..., chat_jid: _Optional[str] = ..., target_message_id: _Optional[str] = ..., target_sender_jid: _Optional[str] = ...) -> None: ...
+
+class SendRevokeResponse(_message.Message):
+    __slots__ = ("message_id", "server_timestamp", "deduped")
+    MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    SERVER_TIMESTAMP_FIELD_NUMBER: _ClassVar[int]
+    DEDUPED_FIELD_NUMBER: _ClassVar[int]
+    message_id: str
+    server_timestamp: _timestamp_pb2.Timestamp
+    deduped: bool
+    def __init__(self, message_id: _Optional[str] = ..., server_timestamp: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., deduped: bool = ...) -> None: ...
+
+class ReactionEvent(_message.Message):
+    __slots__ = ("chat_jid", "sender_jid", "target_message_id", "emoji", "timestamp_ms", "grouping_key", "sender_timestamp_ms")
+    CHAT_JID_FIELD_NUMBER: _ClassVar[int]
+    SENDER_JID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    EMOJI_FIELD_NUMBER: _ClassVar[int]
+    TIMESTAMP_MS_FIELD_NUMBER: _ClassVar[int]
+    GROUPING_KEY_FIELD_NUMBER: _ClassVar[int]
+    SENDER_TIMESTAMP_MS_FIELD_NUMBER: _ClassVar[int]
+    chat_jid: str
+    sender_jid: str
+    target_message_id: str
+    emoji: str
+    timestamp_ms: int
+    grouping_key: str
+    sender_timestamp_ms: int
+    def __init__(self, chat_jid: _Optional[str] = ..., sender_jid: _Optional[str] = ..., target_message_id: _Optional[str] = ..., emoji: _Optional[str] = ..., timestamp_ms: _Optional[int] = ..., grouping_key: _Optional[str] = ..., sender_timestamp_ms: _Optional[int] = ...) -> None: ...
+
+class MessageEditEvent(_message.Message):
+    __slots__ = ("chat_jid", "sender_jid", "target_message_id", "new_text", "timestamp_ms")
+    CHAT_JID_FIELD_NUMBER: _ClassVar[int]
+    SENDER_JID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    NEW_TEXT_FIELD_NUMBER: _ClassVar[int]
+    TIMESTAMP_MS_FIELD_NUMBER: _ClassVar[int]
+    chat_jid: str
+    sender_jid: str
+    target_message_id: str
+    new_text: str
+    timestamp_ms: int
+    def __init__(self, chat_jid: _Optional[str] = ..., sender_jid: _Optional[str] = ..., target_message_id: _Optional[str] = ..., new_text: _Optional[str] = ..., timestamp_ms: _Optional[int] = ...) -> None: ...
+
+class MessageRevokeEvent(_message.Message):
+    __slots__ = ("chat_jid", "sender_jid", "target_message_id", "is_admin_revoke", "timestamp_ms")
+    CHAT_JID_FIELD_NUMBER: _ClassVar[int]
+    SENDER_JID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    IS_ADMIN_REVOKE_FIELD_NUMBER: _ClassVar[int]
+    TIMESTAMP_MS_FIELD_NUMBER: _ClassVar[int]
+    chat_jid: str
+    sender_jid: str
+    target_message_id: str
+    is_admin_revoke: bool
+    timestamp_ms: int
+    def __init__(self, chat_jid: _Optional[str] = ..., sender_jid: _Optional[str] = ..., target_message_id: _Optional[str] = ..., is_admin_revoke: bool = ..., timestamp_ms: _Optional[int] = ...) -> None: ...
+
+class MessageDeleteForMeEvent(_message.Message):
+    __slots__ = ("chat_jid", "target_message_id", "timestamp_ms", "is_from_me", "from_full_sync")
+    CHAT_JID_FIELD_NUMBER: _ClassVar[int]
+    TARGET_MESSAGE_ID_FIELD_NUMBER: _ClassVar[int]
+    TIMESTAMP_MS_FIELD_NUMBER: _ClassVar[int]
+    IS_FROM_ME_FIELD_NUMBER: _ClassVar[int]
+    FROM_FULL_SYNC_FIELD_NUMBER: _ClassVar[int]
+    chat_jid: str
+    target_message_id: str
+    timestamp_ms: int
+    is_from_me: bool
+    from_full_sync: bool
+    def __init__(self, chat_jid: _Optional[str] = ..., target_message_id: _Optional[str] = ..., timestamp_ms: _Optional[int] = ..., is_from_me: bool = ..., from_full_sync: bool = ...) -> None: ...

@@ -150,6 +150,30 @@ service GatewayService {
   rpc SubscribePresence(SubscribePresenceRequest) returns (SubscribePresenceResponse);
 
   // ───────────────────────────────────────────────────────────────────────────
+  // Reactions / Edits / Revokes (Phase 5)
+  // ───────────────────────────────────────────────────────────────────────────
+  //
+  // 三个元操作 RPC 都不接 idempotency 缓存（首版 Deduped 始终为 false）：
+  // whatsmeow 内部以 target_message_id 作为 stanza key，重发由 WhatsApp 自行去重。
+  //
+  // 错误映射：
+  //   - chat_jid / target_message_id 空，或 JID 非法 → INVALID_ARGUMENT
+  //   - account_key 未注册 → NOT_FOUND
+  //   - 其它（whatsmeow 业务错误 / 网络）→ INTERNAL，error_message 透传原始文本
+
+  // 对一条消息发送 reaction（emoji 为空字符串表示取消反应）。
+  // target_sender_jid 在 DM 中可空（whatsmeow 自行从 chat_jid 推断），
+  // 群聊里加给他人消息时必须传被反应消息的发送者 JID。
+  rpc SendReaction(SendReactionRequest) returns (SendReactionResponse);
+
+  // 编辑一条已发送消息的文本。whatsmeow EditWindow=20min，超时由 WhatsApp 拒绝。
+  rpc SendEdit(SendEditRequest) returns (SendEditResponse);
+
+  // 撤回一条消息。target_sender_jid 在群聊管理员撤回他人消息时必须传被撤回者 JID；
+  // 自己撤回自己消息可空（whatsmeow 内部用 EmptyJID 标记 FromMe=true）。
+  rpc SendRevoke(SendRevokeRequest) returns (SendRevokeResponse);
+
+  // ───────────────────────────────────────────────────────────────────────────
   // Media (Phase 4.3)
   // ───────────────────────────────────────────────────────────────────────────
   //
@@ -367,10 +391,19 @@ message StreamEventsResponse {
     // 公开层 MessageEvent(media=...) 以保持 router.message 路由统一。
     MediaMessageEvent media_message = 22;
     UnknownEvent unknown = 99;
+
+    // Phase 5 元操作事件（reactions / edits / revokes / delete-for-me）。
+    // 这四类不折叠回 MessageEvent，由 router 提供独立装饰器路由。
+    ReactionEvent reaction = 100;
+    MessageEditEvent message_edit = 101;
+    MessageRevokeEvent message_revoke = 102;
+    MessageDeleteForMeEvent message_delete_for_me = 103;
   }
 
   // 为未来的事件变体保留。
   reserved 23 to 98;
+  // 为未来的元操作事件保留（polls / starred / pinned / forward 等）。
+  reserved 104 to 199;
 }
 
 message ConnectedEvent {}
@@ -912,4 +945,107 @@ message DownloadMediaRequest {
 // 客户端按收到顺序拼接即可。流自然结束（end-of-stream）表示下载完毕。
 message DownloadMediaChunk {
   bytes chunk = 1;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reactions / Edits / Revokes (Phase 5)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// 三个出站元操作 + 四个入站元操作事件。所有响应 message 与 SendMessageResponse
+// 的字段形状对齐（message_id / google.protobuf.Timestamp server_timestamp /
+// deduped），便于 Python SendResult.from_proto 直接复用。
+
+message SendReactionRequest {
+  string account_key = 1;
+  // 必填。会话 JID（DM 中是对端 JID，群聊中是群 JID）。
+  string chat_jid = 2;
+  // 必填。被反应消息的 message_id。
+  string target_message_id = 3;
+  // 群聊中给他人消息加 reaction 时必填，DM / 自己消息可空。
+  string target_sender_jid = 4;
+  // 反应表情。空字符串等同于取消反应（whatsmeow RemoveReactionText）。
+  string emoji = 5;
+}
+
+message SendReactionResponse {
+  string message_id = 1;
+  google.protobuf.Timestamp server_timestamp = 2;
+  bool deduped = 3;
+}
+
+message SendEditRequest {
+  string account_key = 1;
+  // 必填。会话 JID。
+  string chat_jid = 2;
+  // 必填。被编辑消息的 message_id。
+  string target_message_id = 3;
+  // 必填。新文本（不允许空字符串；如果想"清空"消息，请走 SendRevoke）。
+  string new_text = 4;
+}
+
+message SendEditResponse {
+  string message_id = 1;
+  google.protobuf.Timestamp server_timestamp = 2;
+  bool deduped = 3;
+}
+
+message SendRevokeRequest {
+  string account_key = 1;
+  // 必填。会话 JID。
+  string chat_jid = 2;
+  // 必填。被撤回消息的 message_id。
+  string target_message_id = 3;
+  // 群聊管理员撤回他人消息时必填，自己撤回自己消息可空。
+  string target_sender_jid = 4;
+}
+
+message SendRevokeResponse {
+  string message_id = 1;
+  google.protobuf.Timestamp server_timestamp = 2;
+  bool deduped = 3;
+}
+
+// 入站 reaction 事件。emoji 为空字符串表示对方取消了 reaction。
+// grouping_key / sender_timestamp_ms 透传 whatsmeow ReactionMessage 字段，
+// 用于客户端做 reaction 状态聚合（同一发送者多次切换 emoji 时去重）。
+message ReactionEvent {
+  string chat_jid = 1;
+  string sender_jid = 2;
+  string target_message_id = 3;
+  string emoji = 4;
+  int64 timestamp_ms = 5;
+  string grouping_key = 6;
+  int64 sender_timestamp_ms = 7;
+}
+
+// 入站消息编辑事件。target_message_id 是被编辑消息的原始 ID
+// （whatsmeow 在 IsEdit=true 时已经 unwrap protocolMessage.editedMessage 到
+// events.Message 顶层，原始 ID 写入 Info.ID）。
+message MessageEditEvent {
+  string chat_jid = 1;
+  string sender_jid = 2;
+  string target_message_id = 3;
+  string new_text = 4;
+  int64 timestamp_ms = 5;
+}
+
+// 入站消息撤回事件。is_admin_revoke=true 表示群管理员撤回他人消息
+// （whatsmeow events.Message.Info.Edit == EditAttributeAdminRevoke "8"）。
+message MessageRevokeEvent {
+  string chat_jid = 1;
+  string sender_jid = 2;
+  string target_message_id = 3;
+  bool is_admin_revoke = 4;
+  int64 timestamp_ms = 5;
+}
+
+// 入站 "delete-for-me" 事件。WhatsApp 端从用户自己设备删除某条消息时触发；
+// 不同于 revoke，这条消息仍然存在于其它设备。is_from_me 表示被删消息原本是
+// 自己发的；from_full_sync 表示这是新设备首次全量同步带回的历史删除事件。
+message MessageDeleteForMeEvent {
+  string chat_jid = 1;
+  string target_message_id = 2;
+  int64 timestamp_ms = 3;
+  bool is_from_me = 4;
+  bool from_full_sync = 5;
 }

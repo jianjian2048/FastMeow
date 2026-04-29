@@ -73,6 +73,9 @@ const (
 	GatewayService_SendPresence_FullMethodName            = "/fastmeow.v1.GatewayService/SendPresence"
 	GatewayService_SendChatPresence_FullMethodName        = "/fastmeow.v1.GatewayService/SendChatPresence"
 	GatewayService_SubscribePresence_FullMethodName       = "/fastmeow.v1.GatewayService/SubscribePresence"
+	GatewayService_SendReaction_FullMethodName            = "/fastmeow.v1.GatewayService/SendReaction"
+	GatewayService_SendEdit_FullMethodName                = "/fastmeow.v1.GatewayService/SendEdit"
+	GatewayService_SendRevoke_FullMethodName              = "/fastmeow.v1.GatewayService/SendRevoke"
 	GatewayService_SendMedia_FullMethodName               = "/fastmeow.v1.GatewayService/SendMedia"
 	GatewayService_DownloadMedia_FullMethodName           = "/fastmeow.v1.GatewayService/DownloadMedia"
 	GatewayService_Shutdown_FullMethodName                = "/fastmeow.v1.GatewayService/Shutdown"
@@ -147,6 +150,15 @@ type GatewayServiceClient interface {
 	// 订阅指定 JID 的在线状态推送（对方上线 / 下线 / 最近一次活跃时间）。
 	// 对应 whatsmeow Client.SubscribePresence。
 	SubscribePresence(ctx context.Context, in *SubscribePresenceRequest, opts ...grpc.CallOption) (*SubscribePresenceResponse, error)
+	// 对一条消息发送 reaction（emoji 为空字符串表示取消反应）。
+	// target_sender_jid 在 DM 中可空（whatsmeow 自行从 chat_jid 推断），
+	// 群聊里加给他人消息时必须传被反应消息的发送者 JID。
+	SendReaction(ctx context.Context, in *SendReactionRequest, opts ...grpc.CallOption) (*SendReactionResponse, error)
+	// 编辑一条已发送消息的文本。whatsmeow EditWindow=20min，超时由 WhatsApp 拒绝。
+	SendEdit(ctx context.Context, in *SendEditRequest, opts ...grpc.CallOption) (*SendEditResponse, error)
+	// 撤回一条消息。target_sender_jid 在群聊管理员撤回他人消息时必须传被撤回者 JID；
+	// 自己撤回自己消息可空（whatsmeow 内部用 EmptyJID 标记 FromMe=true）。
+	SendRevoke(ctx context.Context, in *SendRevokeRequest, opts ...grpc.CallOption) (*SendRevokeResponse, error)
 	// 上传媒体并发送媒体消息。client streaming：第 1 帧 SendMediaInit
 	// 携带元数据，后续帧为 chunk bytes。sidecar 在收完所有 chunk 后
 	// 一次性回 SendMediaResponse。
@@ -378,6 +390,36 @@ func (c *gatewayServiceClient) SubscribePresence(ctx context.Context, in *Subscr
 	return out, nil
 }
 
+func (c *gatewayServiceClient) SendReaction(ctx context.Context, in *SendReactionRequest, opts ...grpc.CallOption) (*SendReactionResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SendReactionResponse)
+	err := c.cc.Invoke(ctx, GatewayService_SendReaction_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gatewayServiceClient) SendEdit(ctx context.Context, in *SendEditRequest, opts ...grpc.CallOption) (*SendEditResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SendEditResponse)
+	err := c.cc.Invoke(ctx, GatewayService_SendEdit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *gatewayServiceClient) SendRevoke(ctx context.Context, in *SendRevokeRequest, opts ...grpc.CallOption) (*SendRevokeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SendRevokeResponse)
+	err := c.cc.Invoke(ctx, GatewayService_SendRevoke_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *gatewayServiceClient) SendMedia(ctx context.Context, opts ...grpc.CallOption) (grpc.ClientStreamingClient[SendMediaRequest, SendMediaResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	stream, err := c.cc.NewStream(ctx, &GatewayService_ServiceDesc.Streams[1], GatewayService_SendMedia_FullMethodName, cOpts...)
@@ -489,6 +531,15 @@ type GatewayServiceServer interface {
 	// 订阅指定 JID 的在线状态推送（对方上线 / 下线 / 最近一次活跃时间）。
 	// 对应 whatsmeow Client.SubscribePresence。
 	SubscribePresence(context.Context, *SubscribePresenceRequest) (*SubscribePresenceResponse, error)
+	// 对一条消息发送 reaction（emoji 为空字符串表示取消反应）。
+	// target_sender_jid 在 DM 中可空（whatsmeow 自行从 chat_jid 推断），
+	// 群聊里加给他人消息时必须传被反应消息的发送者 JID。
+	SendReaction(context.Context, *SendReactionRequest) (*SendReactionResponse, error)
+	// 编辑一条已发送消息的文本。whatsmeow EditWindow=20min，超时由 WhatsApp 拒绝。
+	SendEdit(context.Context, *SendEditRequest) (*SendEditResponse, error)
+	// 撤回一条消息。target_sender_jid 在群聊管理员撤回他人消息时必须传被撤回者 JID；
+	// 自己撤回自己消息可空（whatsmeow 内部用 EmptyJID 标记 FromMe=true）。
+	SendRevoke(context.Context, *SendRevokeRequest) (*SendRevokeResponse, error)
 	// 上传媒体并发送媒体消息。client streaming：第 1 帧 SendMediaInit
 	// 携带元数据，后续帧为 chunk bytes。sidecar 在收完所有 chunk 后
 	// 一次性回 SendMediaResponse。
@@ -569,6 +620,15 @@ func (UnimplementedGatewayServiceServer) SendChatPresence(context.Context, *Send
 }
 func (UnimplementedGatewayServiceServer) SubscribePresence(context.Context, *SubscribePresenceRequest) (*SubscribePresenceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SubscribePresence not implemented")
+}
+func (UnimplementedGatewayServiceServer) SendReaction(context.Context, *SendReactionRequest) (*SendReactionResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendReaction not implemented")
+}
+func (UnimplementedGatewayServiceServer) SendEdit(context.Context, *SendEditRequest) (*SendEditResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendEdit not implemented")
+}
+func (UnimplementedGatewayServiceServer) SendRevoke(context.Context, *SendRevokeRequest) (*SendRevokeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendRevoke not implemented")
 }
 func (UnimplementedGatewayServiceServer) SendMedia(grpc.ClientStreamingServer[SendMediaRequest, SendMediaResponse]) error {
 	return status.Error(codes.Unimplemented, "method SendMedia not implemented")
@@ -952,6 +1012,60 @@ func _GatewayService_SubscribePresence_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GatewayService_SendReaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendReactionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatewayServiceServer).SendReaction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatewayService_SendReaction_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatewayServiceServer).SendReaction(ctx, req.(*SendReactionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GatewayService_SendEdit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendEditRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatewayServiceServer).SendEdit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatewayService_SendEdit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatewayServiceServer).SendEdit(ctx, req.(*SendEditRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GatewayService_SendRevoke_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendRevokeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GatewayServiceServer).SendRevoke(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GatewayService_SendRevoke_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GatewayServiceServer).SendRevoke(ctx, req.(*SendRevokeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _GatewayService_SendMedia_Handler(srv interface{}, stream grpc.ServerStream) error {
 	return srv.(GatewayServiceServer).SendMedia(&grpc.GenericServerStream[SendMediaRequest, SendMediaResponse]{ServerStream: stream})
 }
@@ -1070,6 +1184,18 @@ var GatewayService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SubscribePresence",
 			Handler:    _GatewayService_SubscribePresence_Handler,
+		},
+		{
+			MethodName: "SendReaction",
+			Handler:    _GatewayService_SendReaction_Handler,
+		},
+		{
+			MethodName: "SendEdit",
+			Handler:    _GatewayService_SendEdit_Handler,
+		},
+		{
+			MethodName: "SendRevoke",
+			Handler:    _GatewayService_SendRevoke_Handler,
 		},
 		{
 			MethodName: "Shutdown",

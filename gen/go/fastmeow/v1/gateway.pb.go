@@ -1297,6 +1297,10 @@ type StreamEventsResponse struct {
 	//	*StreamEventsResponse_ChatPresence
 	//	*StreamEventsResponse_MediaMessage
 	//	*StreamEventsResponse_Unknown
+	//	*StreamEventsResponse_Reaction
+	//	*StreamEventsResponse_MessageEdit
+	//	*StreamEventsResponse_MessageRevoke
+	//	*StreamEventsResponse_MessageDeleteForMe
 	Event         isStreamEventsResponse_Event `protobuf_oneof:"event"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1500,6 +1504,42 @@ func (x *StreamEventsResponse) GetUnknown() *UnknownEvent {
 	return nil
 }
 
+func (x *StreamEventsResponse) GetReaction() *ReactionEvent {
+	if x != nil {
+		if x, ok := x.Event.(*StreamEventsResponse_Reaction); ok {
+			return x.Reaction
+		}
+	}
+	return nil
+}
+
+func (x *StreamEventsResponse) GetMessageEdit() *MessageEditEvent {
+	if x != nil {
+		if x, ok := x.Event.(*StreamEventsResponse_MessageEdit); ok {
+			return x.MessageEdit
+		}
+	}
+	return nil
+}
+
+func (x *StreamEventsResponse) GetMessageRevoke() *MessageRevokeEvent {
+	if x != nil {
+		if x, ok := x.Event.(*StreamEventsResponse_MessageRevoke); ok {
+			return x.MessageRevoke
+		}
+	}
+	return nil
+}
+
+func (x *StreamEventsResponse) GetMessageDeleteForMe() *MessageDeleteForMeEvent {
+	if x != nil {
+		if x, ok := x.Event.(*StreamEventsResponse_MessageDeleteForMe); ok {
+			return x.MessageDeleteForMe
+		}
+	}
+	return nil
+}
+
 type isStreamEventsResponse_Event interface {
 	isStreamEventsResponse_Event()
 }
@@ -1564,6 +1604,24 @@ type StreamEventsResponse_Unknown struct {
 	Unknown *UnknownEvent `protobuf:"bytes,99,opt,name=unknown,proto3,oneof"`
 }
 
+type StreamEventsResponse_Reaction struct {
+	// Phase 5 元操作事件（reactions / edits / revokes / delete-for-me）。
+	// 这四类不折叠回 MessageEvent，由 router 提供独立装饰器路由。
+	Reaction *ReactionEvent `protobuf:"bytes,100,opt,name=reaction,proto3,oneof"`
+}
+
+type StreamEventsResponse_MessageEdit struct {
+	MessageEdit *MessageEditEvent `protobuf:"bytes,101,opt,name=message_edit,json=messageEdit,proto3,oneof"`
+}
+
+type StreamEventsResponse_MessageRevoke struct {
+	MessageRevoke *MessageRevokeEvent `protobuf:"bytes,102,opt,name=message_revoke,json=messageRevoke,proto3,oneof"`
+}
+
+type StreamEventsResponse_MessageDeleteForMe struct {
+	MessageDeleteForMe *MessageDeleteForMeEvent `protobuf:"bytes,103,opt,name=message_delete_for_me,json=messageDeleteForMe,proto3,oneof"`
+}
+
 func (*StreamEventsResponse_Connected) isStreamEventsResponse_Event() {}
 
 func (*StreamEventsResponse_Disconnected) isStreamEventsResponse_Event() {}
@@ -1591,6 +1649,14 @@ func (*StreamEventsResponse_ChatPresence) isStreamEventsResponse_Event() {}
 func (*StreamEventsResponse_MediaMessage) isStreamEventsResponse_Event() {}
 
 func (*StreamEventsResponse_Unknown) isStreamEventsResponse_Event() {}
+
+func (*StreamEventsResponse_Reaction) isStreamEventsResponse_Event() {}
+
+func (*StreamEventsResponse_MessageEdit) isStreamEventsResponse_Event() {}
+
+func (*StreamEventsResponse_MessageRevoke) isStreamEventsResponse_Event() {}
+
+func (*StreamEventsResponse_MessageDeleteForMe) isStreamEventsResponse_Event() {}
 
 type ConnectedEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -4772,6 +4838,739 @@ func (x *DownloadMediaChunk) GetChunk() []byte {
 	return nil
 }
 
+type SendReactionRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	AccountKey string                 `protobuf:"bytes,1,opt,name=account_key,json=accountKey,proto3" json:"account_key,omitempty"`
+	// 必填。会话 JID（DM 中是对端 JID，群聊中是群 JID）。
+	ChatJid string `protobuf:"bytes,2,opt,name=chat_jid,json=chatJid,proto3" json:"chat_jid,omitempty"`
+	// 必填。被反应消息的 message_id。
+	TargetMessageId string `protobuf:"bytes,3,opt,name=target_message_id,json=targetMessageId,proto3" json:"target_message_id,omitempty"`
+	// 群聊中给他人消息加 reaction 时必填，DM / 自己消息可空。
+	TargetSenderJid string `protobuf:"bytes,4,opt,name=target_sender_jid,json=targetSenderJid,proto3" json:"target_sender_jid,omitempty"`
+	// 反应表情。空字符串等同于取消反应（whatsmeow RemoveReactionText）。
+	Emoji         string `protobuf:"bytes,5,opt,name=emoji,proto3" json:"emoji,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SendReactionRequest) Reset() {
+	*x = SendReactionRequest{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[67]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendReactionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendReactionRequest) ProtoMessage() {}
+
+func (x *SendReactionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[67]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendReactionRequest.ProtoReflect.Descriptor instead.
+func (*SendReactionRequest) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{67}
+}
+
+func (x *SendReactionRequest) GetAccountKey() string {
+	if x != nil {
+		return x.AccountKey
+	}
+	return ""
+}
+
+func (x *SendReactionRequest) GetChatJid() string {
+	if x != nil {
+		return x.ChatJid
+	}
+	return ""
+}
+
+func (x *SendReactionRequest) GetTargetMessageId() string {
+	if x != nil {
+		return x.TargetMessageId
+	}
+	return ""
+}
+
+func (x *SendReactionRequest) GetTargetSenderJid() string {
+	if x != nil {
+		return x.TargetSenderJid
+	}
+	return ""
+}
+
+func (x *SendReactionRequest) GetEmoji() string {
+	if x != nil {
+		return x.Emoji
+	}
+	return ""
+}
+
+type SendReactionResponse struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	MessageId       string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	ServerTimestamp *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=server_timestamp,json=serverTimestamp,proto3" json:"server_timestamp,omitempty"`
+	Deduped         bool                   `protobuf:"varint,3,opt,name=deduped,proto3" json:"deduped,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SendReactionResponse) Reset() {
+	*x = SendReactionResponse{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[68]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendReactionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendReactionResponse) ProtoMessage() {}
+
+func (x *SendReactionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[68]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendReactionResponse.ProtoReflect.Descriptor instead.
+func (*SendReactionResponse) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{68}
+}
+
+func (x *SendReactionResponse) GetMessageId() string {
+	if x != nil {
+		return x.MessageId
+	}
+	return ""
+}
+
+func (x *SendReactionResponse) GetServerTimestamp() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ServerTimestamp
+	}
+	return nil
+}
+
+func (x *SendReactionResponse) GetDeduped() bool {
+	if x != nil {
+		return x.Deduped
+	}
+	return false
+}
+
+type SendEditRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	AccountKey string                 `protobuf:"bytes,1,opt,name=account_key,json=accountKey,proto3" json:"account_key,omitempty"`
+	// 必填。会话 JID。
+	ChatJid string `protobuf:"bytes,2,opt,name=chat_jid,json=chatJid,proto3" json:"chat_jid,omitempty"`
+	// 必填。被编辑消息的 message_id。
+	TargetMessageId string `protobuf:"bytes,3,opt,name=target_message_id,json=targetMessageId,proto3" json:"target_message_id,omitempty"`
+	// 必填。新文本（不允许空字符串；如果想"清空"消息，请走 SendRevoke）。
+	NewText       string `protobuf:"bytes,4,opt,name=new_text,json=newText,proto3" json:"new_text,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SendEditRequest) Reset() {
+	*x = SendEditRequest{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[69]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendEditRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendEditRequest) ProtoMessage() {}
+
+func (x *SendEditRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[69]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendEditRequest.ProtoReflect.Descriptor instead.
+func (*SendEditRequest) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{69}
+}
+
+func (x *SendEditRequest) GetAccountKey() string {
+	if x != nil {
+		return x.AccountKey
+	}
+	return ""
+}
+
+func (x *SendEditRequest) GetChatJid() string {
+	if x != nil {
+		return x.ChatJid
+	}
+	return ""
+}
+
+func (x *SendEditRequest) GetTargetMessageId() string {
+	if x != nil {
+		return x.TargetMessageId
+	}
+	return ""
+}
+
+func (x *SendEditRequest) GetNewText() string {
+	if x != nil {
+		return x.NewText
+	}
+	return ""
+}
+
+type SendEditResponse struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	MessageId       string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	ServerTimestamp *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=server_timestamp,json=serverTimestamp,proto3" json:"server_timestamp,omitempty"`
+	Deduped         bool                   `protobuf:"varint,3,opt,name=deduped,proto3" json:"deduped,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SendEditResponse) Reset() {
+	*x = SendEditResponse{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[70]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendEditResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendEditResponse) ProtoMessage() {}
+
+func (x *SendEditResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[70]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendEditResponse.ProtoReflect.Descriptor instead.
+func (*SendEditResponse) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{70}
+}
+
+func (x *SendEditResponse) GetMessageId() string {
+	if x != nil {
+		return x.MessageId
+	}
+	return ""
+}
+
+func (x *SendEditResponse) GetServerTimestamp() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ServerTimestamp
+	}
+	return nil
+}
+
+func (x *SendEditResponse) GetDeduped() bool {
+	if x != nil {
+		return x.Deduped
+	}
+	return false
+}
+
+type SendRevokeRequest struct {
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	AccountKey string                 `protobuf:"bytes,1,opt,name=account_key,json=accountKey,proto3" json:"account_key,omitempty"`
+	// 必填。会话 JID。
+	ChatJid string `protobuf:"bytes,2,opt,name=chat_jid,json=chatJid,proto3" json:"chat_jid,omitempty"`
+	// 必填。被撤回消息的 message_id。
+	TargetMessageId string `protobuf:"bytes,3,opt,name=target_message_id,json=targetMessageId,proto3" json:"target_message_id,omitempty"`
+	// 群聊管理员撤回他人消息时必填，自己撤回自己消息可空。
+	TargetSenderJid string `protobuf:"bytes,4,opt,name=target_sender_jid,json=targetSenderJid,proto3" json:"target_sender_jid,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SendRevokeRequest) Reset() {
+	*x = SendRevokeRequest{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[71]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendRevokeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendRevokeRequest) ProtoMessage() {}
+
+func (x *SendRevokeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[71]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendRevokeRequest.ProtoReflect.Descriptor instead.
+func (*SendRevokeRequest) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{71}
+}
+
+func (x *SendRevokeRequest) GetAccountKey() string {
+	if x != nil {
+		return x.AccountKey
+	}
+	return ""
+}
+
+func (x *SendRevokeRequest) GetChatJid() string {
+	if x != nil {
+		return x.ChatJid
+	}
+	return ""
+}
+
+func (x *SendRevokeRequest) GetTargetMessageId() string {
+	if x != nil {
+		return x.TargetMessageId
+	}
+	return ""
+}
+
+func (x *SendRevokeRequest) GetTargetSenderJid() string {
+	if x != nil {
+		return x.TargetSenderJid
+	}
+	return ""
+}
+
+type SendRevokeResponse struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	MessageId       string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	ServerTimestamp *timestamppb.Timestamp `protobuf:"bytes,2,opt,name=server_timestamp,json=serverTimestamp,proto3" json:"server_timestamp,omitempty"`
+	Deduped         bool                   `protobuf:"varint,3,opt,name=deduped,proto3" json:"deduped,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *SendRevokeResponse) Reset() {
+	*x = SendRevokeResponse{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[72]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SendRevokeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SendRevokeResponse) ProtoMessage() {}
+
+func (x *SendRevokeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[72]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SendRevokeResponse.ProtoReflect.Descriptor instead.
+func (*SendRevokeResponse) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{72}
+}
+
+func (x *SendRevokeResponse) GetMessageId() string {
+	if x != nil {
+		return x.MessageId
+	}
+	return ""
+}
+
+func (x *SendRevokeResponse) GetServerTimestamp() *timestamppb.Timestamp {
+	if x != nil {
+		return x.ServerTimestamp
+	}
+	return nil
+}
+
+func (x *SendRevokeResponse) GetDeduped() bool {
+	if x != nil {
+		return x.Deduped
+	}
+	return false
+}
+
+// 入站 reaction 事件。emoji 为空字符串表示对方取消了 reaction。
+// grouping_key / sender_timestamp_ms 透传 whatsmeow ReactionMessage 字段，
+// 用于客户端做 reaction 状态聚合（同一发送者多次切换 emoji 时去重）。
+type ReactionEvent struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	ChatJid           string                 `protobuf:"bytes,1,opt,name=chat_jid,json=chatJid,proto3" json:"chat_jid,omitempty"`
+	SenderJid         string                 `protobuf:"bytes,2,opt,name=sender_jid,json=senderJid,proto3" json:"sender_jid,omitempty"`
+	TargetMessageId   string                 `protobuf:"bytes,3,opt,name=target_message_id,json=targetMessageId,proto3" json:"target_message_id,omitempty"`
+	Emoji             string                 `protobuf:"bytes,4,opt,name=emoji,proto3" json:"emoji,omitempty"`
+	TimestampMs       int64                  `protobuf:"varint,5,opt,name=timestamp_ms,json=timestampMs,proto3" json:"timestamp_ms,omitempty"`
+	GroupingKey       string                 `protobuf:"bytes,6,opt,name=grouping_key,json=groupingKey,proto3" json:"grouping_key,omitempty"`
+	SenderTimestampMs int64                  `protobuf:"varint,7,opt,name=sender_timestamp_ms,json=senderTimestampMs,proto3" json:"sender_timestamp_ms,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *ReactionEvent) Reset() {
+	*x = ReactionEvent{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[73]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReactionEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReactionEvent) ProtoMessage() {}
+
+func (x *ReactionEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[73]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReactionEvent.ProtoReflect.Descriptor instead.
+func (*ReactionEvent) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{73}
+}
+
+func (x *ReactionEvent) GetChatJid() string {
+	if x != nil {
+		return x.ChatJid
+	}
+	return ""
+}
+
+func (x *ReactionEvent) GetSenderJid() string {
+	if x != nil {
+		return x.SenderJid
+	}
+	return ""
+}
+
+func (x *ReactionEvent) GetTargetMessageId() string {
+	if x != nil {
+		return x.TargetMessageId
+	}
+	return ""
+}
+
+func (x *ReactionEvent) GetEmoji() string {
+	if x != nil {
+		return x.Emoji
+	}
+	return ""
+}
+
+func (x *ReactionEvent) GetTimestampMs() int64 {
+	if x != nil {
+		return x.TimestampMs
+	}
+	return 0
+}
+
+func (x *ReactionEvent) GetGroupingKey() string {
+	if x != nil {
+		return x.GroupingKey
+	}
+	return ""
+}
+
+func (x *ReactionEvent) GetSenderTimestampMs() int64 {
+	if x != nil {
+		return x.SenderTimestampMs
+	}
+	return 0
+}
+
+// 入站消息编辑事件。target_message_id 是被编辑消息的原始 ID
+// （whatsmeow 在 IsEdit=true 时已经 unwrap protocolMessage.editedMessage 到
+// events.Message 顶层，原始 ID 写入 Info.ID）。
+type MessageEditEvent struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ChatJid         string                 `protobuf:"bytes,1,opt,name=chat_jid,json=chatJid,proto3" json:"chat_jid,omitempty"`
+	SenderJid       string                 `protobuf:"bytes,2,opt,name=sender_jid,json=senderJid,proto3" json:"sender_jid,omitempty"`
+	TargetMessageId string                 `protobuf:"bytes,3,opt,name=target_message_id,json=targetMessageId,proto3" json:"target_message_id,omitempty"`
+	NewText         string                 `protobuf:"bytes,4,opt,name=new_text,json=newText,proto3" json:"new_text,omitempty"`
+	TimestampMs     int64                  `protobuf:"varint,5,opt,name=timestamp_ms,json=timestampMs,proto3" json:"timestamp_ms,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MessageEditEvent) Reset() {
+	*x = MessageEditEvent{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[74]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageEditEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageEditEvent) ProtoMessage() {}
+
+func (x *MessageEditEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[74]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageEditEvent.ProtoReflect.Descriptor instead.
+func (*MessageEditEvent) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{74}
+}
+
+func (x *MessageEditEvent) GetChatJid() string {
+	if x != nil {
+		return x.ChatJid
+	}
+	return ""
+}
+
+func (x *MessageEditEvent) GetSenderJid() string {
+	if x != nil {
+		return x.SenderJid
+	}
+	return ""
+}
+
+func (x *MessageEditEvent) GetTargetMessageId() string {
+	if x != nil {
+		return x.TargetMessageId
+	}
+	return ""
+}
+
+func (x *MessageEditEvent) GetNewText() string {
+	if x != nil {
+		return x.NewText
+	}
+	return ""
+}
+
+func (x *MessageEditEvent) GetTimestampMs() int64 {
+	if x != nil {
+		return x.TimestampMs
+	}
+	return 0
+}
+
+// 入站消息撤回事件。is_admin_revoke=true 表示群管理员撤回他人消息
+// （whatsmeow events.Message.Info.Edit == EditAttributeAdminRevoke "8"）。
+type MessageRevokeEvent struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ChatJid         string                 `protobuf:"bytes,1,opt,name=chat_jid,json=chatJid,proto3" json:"chat_jid,omitempty"`
+	SenderJid       string                 `protobuf:"bytes,2,opt,name=sender_jid,json=senderJid,proto3" json:"sender_jid,omitempty"`
+	TargetMessageId string                 `protobuf:"bytes,3,opt,name=target_message_id,json=targetMessageId,proto3" json:"target_message_id,omitempty"`
+	IsAdminRevoke   bool                   `protobuf:"varint,4,opt,name=is_admin_revoke,json=isAdminRevoke,proto3" json:"is_admin_revoke,omitempty"`
+	TimestampMs     int64                  `protobuf:"varint,5,opt,name=timestamp_ms,json=timestampMs,proto3" json:"timestamp_ms,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MessageRevokeEvent) Reset() {
+	*x = MessageRevokeEvent{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[75]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageRevokeEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageRevokeEvent) ProtoMessage() {}
+
+func (x *MessageRevokeEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[75]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageRevokeEvent.ProtoReflect.Descriptor instead.
+func (*MessageRevokeEvent) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{75}
+}
+
+func (x *MessageRevokeEvent) GetChatJid() string {
+	if x != nil {
+		return x.ChatJid
+	}
+	return ""
+}
+
+func (x *MessageRevokeEvent) GetSenderJid() string {
+	if x != nil {
+		return x.SenderJid
+	}
+	return ""
+}
+
+func (x *MessageRevokeEvent) GetTargetMessageId() string {
+	if x != nil {
+		return x.TargetMessageId
+	}
+	return ""
+}
+
+func (x *MessageRevokeEvent) GetIsAdminRevoke() bool {
+	if x != nil {
+		return x.IsAdminRevoke
+	}
+	return false
+}
+
+func (x *MessageRevokeEvent) GetTimestampMs() int64 {
+	if x != nil {
+		return x.TimestampMs
+	}
+	return 0
+}
+
+// 入站 "delete-for-me" 事件。WhatsApp 端从用户自己设备删除某条消息时触发；
+// 不同于 revoke，这条消息仍然存在于其它设备。is_from_me 表示被删消息原本是
+// 自己发的；from_full_sync 表示这是新设备首次全量同步带回的历史删除事件。
+type MessageDeleteForMeEvent struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ChatJid         string                 `protobuf:"bytes,1,opt,name=chat_jid,json=chatJid,proto3" json:"chat_jid,omitempty"`
+	TargetMessageId string                 `protobuf:"bytes,2,opt,name=target_message_id,json=targetMessageId,proto3" json:"target_message_id,omitempty"`
+	TimestampMs     int64                  `protobuf:"varint,3,opt,name=timestamp_ms,json=timestampMs,proto3" json:"timestamp_ms,omitempty"`
+	IsFromMe        bool                   `protobuf:"varint,4,opt,name=is_from_me,json=isFromMe,proto3" json:"is_from_me,omitempty"`
+	FromFullSync    bool                   `protobuf:"varint,5,opt,name=from_full_sync,json=fromFullSync,proto3" json:"from_full_sync,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *MessageDeleteForMeEvent) Reset() {
+	*x = MessageDeleteForMeEvent{}
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[76]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MessageDeleteForMeEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MessageDeleteForMeEvent) ProtoMessage() {}
+
+func (x *MessageDeleteForMeEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_fastmeow_v1_gateway_proto_msgTypes[76]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MessageDeleteForMeEvent.ProtoReflect.Descriptor instead.
+func (*MessageDeleteForMeEvent) Descriptor() ([]byte, []int) {
+	return file_fastmeow_v1_gateway_proto_rawDescGZIP(), []int{76}
+}
+
+func (x *MessageDeleteForMeEvent) GetChatJid() string {
+	if x != nil {
+		return x.ChatJid
+	}
+	return ""
+}
+
+func (x *MessageDeleteForMeEvent) GetTargetMessageId() string {
+	if x != nil {
+		return x.TargetMessageId
+	}
+	return ""
+}
+
+func (x *MessageDeleteForMeEvent) GetTimestampMs() int64 {
+	if x != nil {
+		return x.TimestampMs
+	}
+	return 0
+}
+
+func (x *MessageDeleteForMeEvent) GetIsFromMe() bool {
+	if x != nil {
+		return x.IsFromMe
+	}
+	return false
+}
+
+func (x *MessageDeleteForMeEvent) GetFromFullSync() bool {
+	if x != nil {
+		return x.FromFullSync
+	}
+	return false
+}
+
 var File_fastmeow_v1_gateway_proto protoreflect.FileDescriptor
 
 const file_fastmeow_v1_gateway_proto_rawDesc = "" +
@@ -4840,7 +5639,7 @@ const file_fastmeow_v1_gateway_proto_rawDesc = "" +
 	"\adeduped\x18\x03 \x01(\bR\adeduped\"o\n" +
 	"\x13StreamEventsRequest\x12.\n" +
 	"\x13include_soft_events\x18\x01 \x01(\bR\x11includeSoftEvents\x12(\n" +
-	"\x10resume_after_seq\x18\x02 \x01(\x04R\x0eresumeAfterSeq\"\xd7\b\n" +
+	"\x10resume_after_seq\x18\x02 \x01(\x04R\x0eresumeAfterSeq\"\x81\v\n" +
 	"\x14StreamEventsResponse\x12\x10\n" +
 	"\x03seq\x18\x01 \x01(\x04R\x03seq\x12\x1d\n" +
 	"\n" +
@@ -4867,8 +5666,12 @@ const file_fastmeow_v1_gateway_proto_rawDesc = "" +
 	"\bpresence\x18\x14 \x01(\v2\x1a.fastmeow.v1.PresenceEventH\x00R\bpresence\x12E\n" +
 	"\rchat_presence\x18\x15 \x01(\v2\x1e.fastmeow.v1.ChatPresenceEventH\x00R\fchatPresence\x12E\n" +
 	"\rmedia_message\x18\x16 \x01(\v2\x1e.fastmeow.v1.MediaMessageEventH\x00R\fmediaMessage\x125\n" +
-	"\aunknown\x18c \x01(\v2\x19.fastmeow.v1.UnknownEventH\x00R\aunknownB\a\n" +
-	"\x05eventJ\x04\b\x17\x10c\"\x10\n" +
+	"\aunknown\x18c \x01(\v2\x19.fastmeow.v1.UnknownEventH\x00R\aunknown\x128\n" +
+	"\breaction\x18d \x01(\v2\x1a.fastmeow.v1.ReactionEventH\x00R\breaction\x12B\n" +
+	"\fmessage_edit\x18e \x01(\v2\x1d.fastmeow.v1.MessageEditEventH\x00R\vmessageEdit\x12H\n" +
+	"\x0emessage_revoke\x18f \x01(\v2\x1f.fastmeow.v1.MessageRevokeEventH\x00R\rmessageRevoke\x12Y\n" +
+	"\x15message_delete_for_me\x18g \x01(\v2$.fastmeow.v1.MessageDeleteForMeEventH\x00R\x12messageDeleteForMeB\a\n" +
+	"\x05eventJ\x04\b\x17\x10cJ\x05\bh\x10\xc8\x01\"\x10\n" +
 	"\x0eConnectedEvent\"+\n" +
 	"\x11DisconnectedEvent\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\">\n" +
@@ -5124,7 +5927,71 @@ const file_fastmeow_v1_gateway_proto_rawDesc = "" +
 	"accountKey\x12,\n" +
 	"\x05media\x18\x02 \x01(\v2\x16.fastmeow.v1.MediaInfoR\x05media\"*\n" +
 	"\x12DownloadMediaChunk\x12\x14\n" +
-	"\x05chunk\x18\x01 \x01(\fR\x05chunk*\x90\x01\n" +
+	"\x05chunk\x18\x01 \x01(\fR\x05chunk\"\xbf\x01\n" +
+	"\x13SendReactionRequest\x12\x1f\n" +
+	"\vaccount_key\x18\x01 \x01(\tR\n" +
+	"accountKey\x12\x19\n" +
+	"\bchat_jid\x18\x02 \x01(\tR\achatJid\x12*\n" +
+	"\x11target_message_id\x18\x03 \x01(\tR\x0ftargetMessageId\x12*\n" +
+	"\x11target_sender_jid\x18\x04 \x01(\tR\x0ftargetSenderJid\x12\x14\n" +
+	"\x05emoji\x18\x05 \x01(\tR\x05emoji\"\x96\x01\n" +
+	"\x14SendReactionResponse\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x01 \x01(\tR\tmessageId\x12E\n" +
+	"\x10server_timestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x0fserverTimestamp\x12\x18\n" +
+	"\adeduped\x18\x03 \x01(\bR\adeduped\"\x94\x01\n" +
+	"\x0fSendEditRequest\x12\x1f\n" +
+	"\vaccount_key\x18\x01 \x01(\tR\n" +
+	"accountKey\x12\x19\n" +
+	"\bchat_jid\x18\x02 \x01(\tR\achatJid\x12*\n" +
+	"\x11target_message_id\x18\x03 \x01(\tR\x0ftargetMessageId\x12\x19\n" +
+	"\bnew_text\x18\x04 \x01(\tR\anewText\"\x92\x01\n" +
+	"\x10SendEditResponse\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x01 \x01(\tR\tmessageId\x12E\n" +
+	"\x10server_timestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x0fserverTimestamp\x12\x18\n" +
+	"\adeduped\x18\x03 \x01(\bR\adeduped\"\xa7\x01\n" +
+	"\x11SendRevokeRequest\x12\x1f\n" +
+	"\vaccount_key\x18\x01 \x01(\tR\n" +
+	"accountKey\x12\x19\n" +
+	"\bchat_jid\x18\x02 \x01(\tR\achatJid\x12*\n" +
+	"\x11target_message_id\x18\x03 \x01(\tR\x0ftargetMessageId\x12*\n" +
+	"\x11target_sender_jid\x18\x04 \x01(\tR\x0ftargetSenderJid\"\x94\x01\n" +
+	"\x12SendRevokeResponse\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x01 \x01(\tR\tmessageId\x12E\n" +
+	"\x10server_timestamp\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x0fserverTimestamp\x12\x18\n" +
+	"\adeduped\x18\x03 \x01(\bR\adeduped\"\x81\x02\n" +
+	"\rReactionEvent\x12\x19\n" +
+	"\bchat_jid\x18\x01 \x01(\tR\achatJid\x12\x1d\n" +
+	"\n" +
+	"sender_jid\x18\x02 \x01(\tR\tsenderJid\x12*\n" +
+	"\x11target_message_id\x18\x03 \x01(\tR\x0ftargetMessageId\x12\x14\n" +
+	"\x05emoji\x18\x04 \x01(\tR\x05emoji\x12!\n" +
+	"\ftimestamp_ms\x18\x05 \x01(\x03R\vtimestampMs\x12!\n" +
+	"\fgrouping_key\x18\x06 \x01(\tR\vgroupingKey\x12.\n" +
+	"\x13sender_timestamp_ms\x18\a \x01(\x03R\x11senderTimestampMs\"\xb6\x01\n" +
+	"\x10MessageEditEvent\x12\x19\n" +
+	"\bchat_jid\x18\x01 \x01(\tR\achatJid\x12\x1d\n" +
+	"\n" +
+	"sender_jid\x18\x02 \x01(\tR\tsenderJid\x12*\n" +
+	"\x11target_message_id\x18\x03 \x01(\tR\x0ftargetMessageId\x12\x19\n" +
+	"\bnew_text\x18\x04 \x01(\tR\anewText\x12!\n" +
+	"\ftimestamp_ms\x18\x05 \x01(\x03R\vtimestampMs\"\xc5\x01\n" +
+	"\x12MessageRevokeEvent\x12\x19\n" +
+	"\bchat_jid\x18\x01 \x01(\tR\achatJid\x12\x1d\n" +
+	"\n" +
+	"sender_jid\x18\x02 \x01(\tR\tsenderJid\x12*\n" +
+	"\x11target_message_id\x18\x03 \x01(\tR\x0ftargetMessageId\x12&\n" +
+	"\x0fis_admin_revoke\x18\x04 \x01(\bR\risAdminRevoke\x12!\n" +
+	"\ftimestamp_ms\x18\x05 \x01(\x03R\vtimestampMs\"\xc7\x01\n" +
+	"\x17MessageDeleteForMeEvent\x12\x19\n" +
+	"\bchat_jid\x18\x01 \x01(\tR\achatJid\x12*\n" +
+	"\x11target_message_id\x18\x02 \x01(\tR\x0ftargetMessageId\x12!\n" +
+	"\ftimestamp_ms\x18\x03 \x01(\x03R\vtimestampMs\x12\x1c\n" +
+	"\n" +
+	"is_from_me\x18\x04 \x01(\bR\bisFromMe\x12$\n" +
+	"\x0efrom_full_sync\x18\x05 \x01(\bR\ffromFullSync*\x90\x01\n" +
 	"\vReceiptType\x12\x1c\n" +
 	"\x18RECEIPT_TYPE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16RECEIPT_TYPE_DELIVERED\x10\x01\x12\x15\n" +
@@ -5149,7 +6016,7 @@ const file_fastmeow_v1_gateway_proto_rawDesc = "" +
 	"\x10MEDIA_KIND_VIDEO\x10\x02\x12\x14\n" +
 	"\x10MEDIA_KIND_AUDIO\x10\x03\x12\x17\n" +
 	"\x13MEDIA_KIND_DOCUMENT\x10\x04\x12\x16\n" +
-	"\x12MEDIA_KIND_STICKER\x10\x052\xe3\x0f\n" +
+	"\x12MEDIA_KIND_STICKER\x10\x052\xd0\x11\n" +
 	"\x0eGatewayService\x12;\n" +
 	"\x04Ping\x12\x18.fastmeow.v1.PingRequest\x1a\x19.fastmeow.v1.PingResponse\x12V\n" +
 	"\rEnsureAccount\x12!.fastmeow.v1.EnsureAccountRequest\x1a\".fastmeow.v1.EnsureAccountResponse\x12D\n" +
@@ -5172,7 +6039,11 @@ const file_fastmeow_v1_gateway_proto_rawDesc = "" +
 	"\bMarkRead\x12\x1c.fastmeow.v1.MarkReadRequest\x1a\x1d.fastmeow.v1.MarkReadResponse\x12S\n" +
 	"\fSendPresence\x12 .fastmeow.v1.SendPresenceRequest\x1a!.fastmeow.v1.SendPresenceResponse\x12_\n" +
 	"\x10SendChatPresence\x12$.fastmeow.v1.SendChatPresenceRequest\x1a%.fastmeow.v1.SendChatPresenceResponse\x12b\n" +
-	"\x11SubscribePresence\x12%.fastmeow.v1.SubscribePresenceRequest\x1a&.fastmeow.v1.SubscribePresenceResponse\x12L\n" +
+	"\x11SubscribePresence\x12%.fastmeow.v1.SubscribePresenceRequest\x1a&.fastmeow.v1.SubscribePresenceResponse\x12S\n" +
+	"\fSendReaction\x12 .fastmeow.v1.SendReactionRequest\x1a!.fastmeow.v1.SendReactionResponse\x12G\n" +
+	"\bSendEdit\x12\x1c.fastmeow.v1.SendEditRequest\x1a\x1d.fastmeow.v1.SendEditResponse\x12M\n" +
+	"\n" +
+	"SendRevoke\x12\x1e.fastmeow.v1.SendRevokeRequest\x1a\x1f.fastmeow.v1.SendRevokeResponse\x12L\n" +
 	"\tSendMedia\x12\x1d.fastmeow.v1.SendMediaRequest\x1a\x1e.fastmeow.v1.SendMediaResponse(\x01\x12U\n" +
 	"\rDownloadMedia\x12!.fastmeow.v1.DownloadMediaRequest\x1a\x1f.fastmeow.v1.DownloadMediaChunk0\x01\x12G\n" +
 	"\bShutdown\x12\x1c.fastmeow.v1.ShutdownRequest\x1a\x1d.fastmeow.v1.ShutdownResponseB@Z>github.com/jianjian2048/fastmeow/gen/go/fastmeow/v1;fastmeowv1b\x06proto3"
@@ -5190,7 +6061,7 @@ func file_fastmeow_v1_gateway_proto_rawDescGZIP() []byte {
 }
 
 var file_fastmeow_v1_gateway_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_fastmeow_v1_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 67)
+var file_fastmeow_v1_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 77)
 var file_fastmeow_v1_gateway_proto_goTypes = []any{
 	(ReceiptType)(0),        // 0: fastmeow.v1.ReceiptType
 	(PresenceType)(0),       // 1: fastmeow.v1.PresenceType
@@ -5266,7 +6137,17 @@ var file_fastmeow_v1_gateway_proto_goTypes = []any{
 	(*SendMediaResponse)(nil),               // 71: fastmeow.v1.SendMediaResponse
 	(*DownloadMediaRequest)(nil),            // 72: fastmeow.v1.DownloadMediaRequest
 	(*DownloadMediaChunk)(nil),              // 73: fastmeow.v1.DownloadMediaChunk
-	(*timestamppb.Timestamp)(nil),           // 74: google.protobuf.Timestamp
+	(*SendReactionRequest)(nil),             // 74: fastmeow.v1.SendReactionRequest
+	(*SendReactionResponse)(nil),            // 75: fastmeow.v1.SendReactionResponse
+	(*SendEditRequest)(nil),                 // 76: fastmeow.v1.SendEditRequest
+	(*SendEditResponse)(nil),                // 77: fastmeow.v1.SendEditResponse
+	(*SendRevokeRequest)(nil),               // 78: fastmeow.v1.SendRevokeRequest
+	(*SendRevokeResponse)(nil),              // 79: fastmeow.v1.SendRevokeResponse
+	(*ReactionEvent)(nil),                   // 80: fastmeow.v1.ReactionEvent
+	(*MessageEditEvent)(nil),                // 81: fastmeow.v1.MessageEditEvent
+	(*MessageRevokeEvent)(nil),              // 82: fastmeow.v1.MessageRevokeEvent
+	(*MessageDeleteForMeEvent)(nil),         // 83: fastmeow.v1.MessageDeleteForMeEvent
+	(*timestamppb.Timestamp)(nil),           // 84: google.protobuf.Timestamp
 }
 var file_fastmeow_v1_gateway_proto_depIdxs = []int32{
 	5,  // 0: fastmeow.v1.AccountState.state:type_name -> fastmeow.v1.AccountState.State
@@ -5275,8 +6156,8 @@ var file_fastmeow_v1_gateway_proto_depIdxs = []int32{
 	9,  // 3: fastmeow.v1.DisconnectResponse.state:type_name -> fastmeow.v1.AccountState
 	9,  // 4: fastmeow.v1.LogoutResponse.state:type_name -> fastmeow.v1.AccountState
 	19, // 5: fastmeow.v1.SendMessageRequest.text:type_name -> fastmeow.v1.TextBody
-	74, // 6: fastmeow.v1.SendMessageResponse.server_timestamp:type_name -> google.protobuf.Timestamp
-	74, // 7: fastmeow.v1.StreamEventsResponse.observed_at:type_name -> google.protobuf.Timestamp
+	84, // 6: fastmeow.v1.SendMessageResponse.server_timestamp:type_name -> google.protobuf.Timestamp
+	84, // 7: fastmeow.v1.StreamEventsResponse.observed_at:type_name -> google.protobuf.Timestamp
 	23, // 8: fastmeow.v1.StreamEventsResponse.connected:type_name -> fastmeow.v1.ConnectedEvent
 	24, // 9: fastmeow.v1.StreamEventsResponse.disconnected:type_name -> fastmeow.v1.DisconnectedEvent
 	25, // 10: fastmeow.v1.StreamEventsResponse.qr:type_name -> fastmeow.v1.QREvent
@@ -5291,87 +6172,100 @@ var file_fastmeow_v1_gateway_proto_depIdxs = []int32{
 	66, // 19: fastmeow.v1.StreamEventsResponse.chat_presence:type_name -> fastmeow.v1.ChatPresenceEvent
 	68, // 20: fastmeow.v1.StreamEventsResponse.media_message:type_name -> fastmeow.v1.MediaMessageEvent
 	29, // 21: fastmeow.v1.StreamEventsResponse.unknown:type_name -> fastmeow.v1.UnknownEvent
-	74, // 22: fastmeow.v1.MessageEvent.timestamp:type_name -> google.protobuf.Timestamp
-	33, // 23: fastmeow.v1.JoinedGroupEvent.group_info:type_name -> fastmeow.v1.GroupInfo
-	33, // 24: fastmeow.v1.GroupInfoEvent.group_info:type_name -> fastmeow.v1.GroupInfo
-	6,  // 25: fastmeow.v1.GroupParticipantUpdateEvent.action:type_name -> fastmeow.v1.GroupParticipantUpdateEvent.GroupParticipantAction
-	74, // 26: fastmeow.v1.GroupInfo.creation_timestamp:type_name -> google.protobuf.Timestamp
-	34, // 27: fastmeow.v1.GroupInfo.participants:type_name -> fastmeow.v1.GroupParticipant
-	33, // 28: fastmeow.v1.ListJoinedGroupsResponse.groups:type_name -> fastmeow.v1.GroupInfo
-	33, // 29: fastmeow.v1.GetGroupInfoResponse.group_info:type_name -> fastmeow.v1.GroupInfo
-	33, // 30: fastmeow.v1.PreviewGroupInviteResponse.group_info:type_name -> fastmeow.v1.GroupInfo
-	33, // 31: fastmeow.v1.CreateGroupResponse.group_info:type_name -> fastmeow.v1.GroupInfo
-	33, // 32: fastmeow.v1.UpdateGroupSettingsResponse.group_info:type_name -> fastmeow.v1.GroupInfo
-	6,  // 33: fastmeow.v1.UpdateGroupParticipantsRequest.action:type_name -> fastmeow.v1.GroupParticipantUpdateEvent.GroupParticipantAction
-	53, // 34: fastmeow.v1.UpdateGroupParticipantsResponse.results:type_name -> fastmeow.v1.GroupParticipantUpdateResult
-	74, // 35: fastmeow.v1.MarkReadRequest.read_at:type_name -> google.protobuf.Timestamp
-	0,  // 36: fastmeow.v1.MarkReadRequest.receipt_type:type_name -> fastmeow.v1.ReceiptType
-	1,  // 37: fastmeow.v1.SendPresenceRequest.presence:type_name -> fastmeow.v1.PresenceType
-	2,  // 38: fastmeow.v1.SendChatPresenceRequest.state:type_name -> fastmeow.v1.ChatPresenceState
-	3,  // 39: fastmeow.v1.SendChatPresenceRequest.media:type_name -> fastmeow.v1.ChatPresenceMedia
-	74, // 40: fastmeow.v1.ReceiptEvent.timestamp:type_name -> google.protobuf.Timestamp
-	0,  // 41: fastmeow.v1.ReceiptEvent.receipt_type:type_name -> fastmeow.v1.ReceiptType
-	74, // 42: fastmeow.v1.PresenceEvent.last_seen:type_name -> google.protobuf.Timestamp
-	2,  // 43: fastmeow.v1.ChatPresenceEvent.state:type_name -> fastmeow.v1.ChatPresenceState
-	3,  // 44: fastmeow.v1.ChatPresenceEvent.media:type_name -> fastmeow.v1.ChatPresenceMedia
-	4,  // 45: fastmeow.v1.MediaInfo.kind:type_name -> fastmeow.v1.MediaKind
-	74, // 46: fastmeow.v1.MediaMessageEvent.timestamp:type_name -> google.protobuf.Timestamp
-	67, // 47: fastmeow.v1.MediaMessageEvent.media:type_name -> fastmeow.v1.MediaInfo
-	4,  // 48: fastmeow.v1.SendMediaInit.kind:type_name -> fastmeow.v1.MediaKind
-	69, // 49: fastmeow.v1.SendMediaRequest.init:type_name -> fastmeow.v1.SendMediaInit
-	74, // 50: fastmeow.v1.SendMediaResponse.server_timestamp:type_name -> google.protobuf.Timestamp
-	67, // 51: fastmeow.v1.DownloadMediaRequest.media:type_name -> fastmeow.v1.MediaInfo
-	7,  // 52: fastmeow.v1.GatewayService.Ping:input_type -> fastmeow.v1.PingRequest
-	10, // 53: fastmeow.v1.GatewayService.EnsureAccount:input_type -> fastmeow.v1.EnsureAccountRequest
-	12, // 54: fastmeow.v1.GatewayService.Connect:input_type -> fastmeow.v1.ConnectRequest
-	14, // 55: fastmeow.v1.GatewayService.Disconnect:input_type -> fastmeow.v1.DisconnectRequest
-	16, // 56: fastmeow.v1.GatewayService.Logout:input_type -> fastmeow.v1.LogoutRequest
-	18, // 57: fastmeow.v1.GatewayService.SendMessage:input_type -> fastmeow.v1.SendMessageRequest
-	21, // 58: fastmeow.v1.GatewayService.StreamEvents:input_type -> fastmeow.v1.StreamEventsRequest
-	37, // 59: fastmeow.v1.GatewayService.ListJoinedGroups:input_type -> fastmeow.v1.ListJoinedGroupsRequest
-	39, // 60: fastmeow.v1.GatewayService.GetGroupInfo:input_type -> fastmeow.v1.GetGroupInfoRequest
-	41, // 61: fastmeow.v1.GatewayService.PreviewGroupInvite:input_type -> fastmeow.v1.PreviewGroupInviteRequest
-	43, // 62: fastmeow.v1.GatewayService.JoinGroupViaInvite:input_type -> fastmeow.v1.JoinGroupViaInviteRequest
-	45, // 63: fastmeow.v1.GatewayService.LeaveGroup:input_type -> fastmeow.v1.LeaveGroupRequest
-	47, // 64: fastmeow.v1.GatewayService.CreateGroup:input_type -> fastmeow.v1.CreateGroupRequest
-	49, // 65: fastmeow.v1.GatewayService.UpdateGroupSettings:input_type -> fastmeow.v1.UpdateGroupSettingsRequest
-	51, // 66: fastmeow.v1.GatewayService.UpdateGroupParticipants:input_type -> fastmeow.v1.UpdateGroupParticipantsRequest
-	54, // 67: fastmeow.v1.GatewayService.GetGroupInviteLink:input_type -> fastmeow.v1.GetGroupInviteLinkRequest
-	56, // 68: fastmeow.v1.GatewayService.MarkRead:input_type -> fastmeow.v1.MarkReadRequest
-	58, // 69: fastmeow.v1.GatewayService.SendPresence:input_type -> fastmeow.v1.SendPresenceRequest
-	60, // 70: fastmeow.v1.GatewayService.SendChatPresence:input_type -> fastmeow.v1.SendChatPresenceRequest
-	62, // 71: fastmeow.v1.GatewayService.SubscribePresence:input_type -> fastmeow.v1.SubscribePresenceRequest
-	70, // 72: fastmeow.v1.GatewayService.SendMedia:input_type -> fastmeow.v1.SendMediaRequest
-	72, // 73: fastmeow.v1.GatewayService.DownloadMedia:input_type -> fastmeow.v1.DownloadMediaRequest
-	35, // 74: fastmeow.v1.GatewayService.Shutdown:input_type -> fastmeow.v1.ShutdownRequest
-	8,  // 75: fastmeow.v1.GatewayService.Ping:output_type -> fastmeow.v1.PingResponse
-	11, // 76: fastmeow.v1.GatewayService.EnsureAccount:output_type -> fastmeow.v1.EnsureAccountResponse
-	13, // 77: fastmeow.v1.GatewayService.Connect:output_type -> fastmeow.v1.ConnectResponse
-	15, // 78: fastmeow.v1.GatewayService.Disconnect:output_type -> fastmeow.v1.DisconnectResponse
-	17, // 79: fastmeow.v1.GatewayService.Logout:output_type -> fastmeow.v1.LogoutResponse
-	20, // 80: fastmeow.v1.GatewayService.SendMessage:output_type -> fastmeow.v1.SendMessageResponse
-	22, // 81: fastmeow.v1.GatewayService.StreamEvents:output_type -> fastmeow.v1.StreamEventsResponse
-	38, // 82: fastmeow.v1.GatewayService.ListJoinedGroups:output_type -> fastmeow.v1.ListJoinedGroupsResponse
-	40, // 83: fastmeow.v1.GatewayService.GetGroupInfo:output_type -> fastmeow.v1.GetGroupInfoResponse
-	42, // 84: fastmeow.v1.GatewayService.PreviewGroupInvite:output_type -> fastmeow.v1.PreviewGroupInviteResponse
-	44, // 85: fastmeow.v1.GatewayService.JoinGroupViaInvite:output_type -> fastmeow.v1.JoinGroupViaInviteResponse
-	46, // 86: fastmeow.v1.GatewayService.LeaveGroup:output_type -> fastmeow.v1.LeaveGroupResponse
-	48, // 87: fastmeow.v1.GatewayService.CreateGroup:output_type -> fastmeow.v1.CreateGroupResponse
-	50, // 88: fastmeow.v1.GatewayService.UpdateGroupSettings:output_type -> fastmeow.v1.UpdateGroupSettingsResponse
-	52, // 89: fastmeow.v1.GatewayService.UpdateGroupParticipants:output_type -> fastmeow.v1.UpdateGroupParticipantsResponse
-	55, // 90: fastmeow.v1.GatewayService.GetGroupInviteLink:output_type -> fastmeow.v1.GetGroupInviteLinkResponse
-	57, // 91: fastmeow.v1.GatewayService.MarkRead:output_type -> fastmeow.v1.MarkReadResponse
-	59, // 92: fastmeow.v1.GatewayService.SendPresence:output_type -> fastmeow.v1.SendPresenceResponse
-	61, // 93: fastmeow.v1.GatewayService.SendChatPresence:output_type -> fastmeow.v1.SendChatPresenceResponse
-	63, // 94: fastmeow.v1.GatewayService.SubscribePresence:output_type -> fastmeow.v1.SubscribePresenceResponse
-	71, // 95: fastmeow.v1.GatewayService.SendMedia:output_type -> fastmeow.v1.SendMediaResponse
-	73, // 96: fastmeow.v1.GatewayService.DownloadMedia:output_type -> fastmeow.v1.DownloadMediaChunk
-	36, // 97: fastmeow.v1.GatewayService.Shutdown:output_type -> fastmeow.v1.ShutdownResponse
-	75, // [75:98] is the sub-list for method output_type
-	52, // [52:75] is the sub-list for method input_type
-	52, // [52:52] is the sub-list for extension type_name
-	52, // [52:52] is the sub-list for extension extendee
-	0,  // [0:52] is the sub-list for field type_name
+	80, // 22: fastmeow.v1.StreamEventsResponse.reaction:type_name -> fastmeow.v1.ReactionEvent
+	81, // 23: fastmeow.v1.StreamEventsResponse.message_edit:type_name -> fastmeow.v1.MessageEditEvent
+	82, // 24: fastmeow.v1.StreamEventsResponse.message_revoke:type_name -> fastmeow.v1.MessageRevokeEvent
+	83, // 25: fastmeow.v1.StreamEventsResponse.message_delete_for_me:type_name -> fastmeow.v1.MessageDeleteForMeEvent
+	84, // 26: fastmeow.v1.MessageEvent.timestamp:type_name -> google.protobuf.Timestamp
+	33, // 27: fastmeow.v1.JoinedGroupEvent.group_info:type_name -> fastmeow.v1.GroupInfo
+	33, // 28: fastmeow.v1.GroupInfoEvent.group_info:type_name -> fastmeow.v1.GroupInfo
+	6,  // 29: fastmeow.v1.GroupParticipantUpdateEvent.action:type_name -> fastmeow.v1.GroupParticipantUpdateEvent.GroupParticipantAction
+	84, // 30: fastmeow.v1.GroupInfo.creation_timestamp:type_name -> google.protobuf.Timestamp
+	34, // 31: fastmeow.v1.GroupInfo.participants:type_name -> fastmeow.v1.GroupParticipant
+	33, // 32: fastmeow.v1.ListJoinedGroupsResponse.groups:type_name -> fastmeow.v1.GroupInfo
+	33, // 33: fastmeow.v1.GetGroupInfoResponse.group_info:type_name -> fastmeow.v1.GroupInfo
+	33, // 34: fastmeow.v1.PreviewGroupInviteResponse.group_info:type_name -> fastmeow.v1.GroupInfo
+	33, // 35: fastmeow.v1.CreateGroupResponse.group_info:type_name -> fastmeow.v1.GroupInfo
+	33, // 36: fastmeow.v1.UpdateGroupSettingsResponse.group_info:type_name -> fastmeow.v1.GroupInfo
+	6,  // 37: fastmeow.v1.UpdateGroupParticipantsRequest.action:type_name -> fastmeow.v1.GroupParticipantUpdateEvent.GroupParticipantAction
+	53, // 38: fastmeow.v1.UpdateGroupParticipantsResponse.results:type_name -> fastmeow.v1.GroupParticipantUpdateResult
+	84, // 39: fastmeow.v1.MarkReadRequest.read_at:type_name -> google.protobuf.Timestamp
+	0,  // 40: fastmeow.v1.MarkReadRequest.receipt_type:type_name -> fastmeow.v1.ReceiptType
+	1,  // 41: fastmeow.v1.SendPresenceRequest.presence:type_name -> fastmeow.v1.PresenceType
+	2,  // 42: fastmeow.v1.SendChatPresenceRequest.state:type_name -> fastmeow.v1.ChatPresenceState
+	3,  // 43: fastmeow.v1.SendChatPresenceRequest.media:type_name -> fastmeow.v1.ChatPresenceMedia
+	84, // 44: fastmeow.v1.ReceiptEvent.timestamp:type_name -> google.protobuf.Timestamp
+	0,  // 45: fastmeow.v1.ReceiptEvent.receipt_type:type_name -> fastmeow.v1.ReceiptType
+	84, // 46: fastmeow.v1.PresenceEvent.last_seen:type_name -> google.protobuf.Timestamp
+	2,  // 47: fastmeow.v1.ChatPresenceEvent.state:type_name -> fastmeow.v1.ChatPresenceState
+	3,  // 48: fastmeow.v1.ChatPresenceEvent.media:type_name -> fastmeow.v1.ChatPresenceMedia
+	4,  // 49: fastmeow.v1.MediaInfo.kind:type_name -> fastmeow.v1.MediaKind
+	84, // 50: fastmeow.v1.MediaMessageEvent.timestamp:type_name -> google.protobuf.Timestamp
+	67, // 51: fastmeow.v1.MediaMessageEvent.media:type_name -> fastmeow.v1.MediaInfo
+	4,  // 52: fastmeow.v1.SendMediaInit.kind:type_name -> fastmeow.v1.MediaKind
+	69, // 53: fastmeow.v1.SendMediaRequest.init:type_name -> fastmeow.v1.SendMediaInit
+	84, // 54: fastmeow.v1.SendMediaResponse.server_timestamp:type_name -> google.protobuf.Timestamp
+	67, // 55: fastmeow.v1.DownloadMediaRequest.media:type_name -> fastmeow.v1.MediaInfo
+	84, // 56: fastmeow.v1.SendReactionResponse.server_timestamp:type_name -> google.protobuf.Timestamp
+	84, // 57: fastmeow.v1.SendEditResponse.server_timestamp:type_name -> google.protobuf.Timestamp
+	84, // 58: fastmeow.v1.SendRevokeResponse.server_timestamp:type_name -> google.protobuf.Timestamp
+	7,  // 59: fastmeow.v1.GatewayService.Ping:input_type -> fastmeow.v1.PingRequest
+	10, // 60: fastmeow.v1.GatewayService.EnsureAccount:input_type -> fastmeow.v1.EnsureAccountRequest
+	12, // 61: fastmeow.v1.GatewayService.Connect:input_type -> fastmeow.v1.ConnectRequest
+	14, // 62: fastmeow.v1.GatewayService.Disconnect:input_type -> fastmeow.v1.DisconnectRequest
+	16, // 63: fastmeow.v1.GatewayService.Logout:input_type -> fastmeow.v1.LogoutRequest
+	18, // 64: fastmeow.v1.GatewayService.SendMessage:input_type -> fastmeow.v1.SendMessageRequest
+	21, // 65: fastmeow.v1.GatewayService.StreamEvents:input_type -> fastmeow.v1.StreamEventsRequest
+	37, // 66: fastmeow.v1.GatewayService.ListJoinedGroups:input_type -> fastmeow.v1.ListJoinedGroupsRequest
+	39, // 67: fastmeow.v1.GatewayService.GetGroupInfo:input_type -> fastmeow.v1.GetGroupInfoRequest
+	41, // 68: fastmeow.v1.GatewayService.PreviewGroupInvite:input_type -> fastmeow.v1.PreviewGroupInviteRequest
+	43, // 69: fastmeow.v1.GatewayService.JoinGroupViaInvite:input_type -> fastmeow.v1.JoinGroupViaInviteRequest
+	45, // 70: fastmeow.v1.GatewayService.LeaveGroup:input_type -> fastmeow.v1.LeaveGroupRequest
+	47, // 71: fastmeow.v1.GatewayService.CreateGroup:input_type -> fastmeow.v1.CreateGroupRequest
+	49, // 72: fastmeow.v1.GatewayService.UpdateGroupSettings:input_type -> fastmeow.v1.UpdateGroupSettingsRequest
+	51, // 73: fastmeow.v1.GatewayService.UpdateGroupParticipants:input_type -> fastmeow.v1.UpdateGroupParticipantsRequest
+	54, // 74: fastmeow.v1.GatewayService.GetGroupInviteLink:input_type -> fastmeow.v1.GetGroupInviteLinkRequest
+	56, // 75: fastmeow.v1.GatewayService.MarkRead:input_type -> fastmeow.v1.MarkReadRequest
+	58, // 76: fastmeow.v1.GatewayService.SendPresence:input_type -> fastmeow.v1.SendPresenceRequest
+	60, // 77: fastmeow.v1.GatewayService.SendChatPresence:input_type -> fastmeow.v1.SendChatPresenceRequest
+	62, // 78: fastmeow.v1.GatewayService.SubscribePresence:input_type -> fastmeow.v1.SubscribePresenceRequest
+	74, // 79: fastmeow.v1.GatewayService.SendReaction:input_type -> fastmeow.v1.SendReactionRequest
+	76, // 80: fastmeow.v1.GatewayService.SendEdit:input_type -> fastmeow.v1.SendEditRequest
+	78, // 81: fastmeow.v1.GatewayService.SendRevoke:input_type -> fastmeow.v1.SendRevokeRequest
+	70, // 82: fastmeow.v1.GatewayService.SendMedia:input_type -> fastmeow.v1.SendMediaRequest
+	72, // 83: fastmeow.v1.GatewayService.DownloadMedia:input_type -> fastmeow.v1.DownloadMediaRequest
+	35, // 84: fastmeow.v1.GatewayService.Shutdown:input_type -> fastmeow.v1.ShutdownRequest
+	8,  // 85: fastmeow.v1.GatewayService.Ping:output_type -> fastmeow.v1.PingResponse
+	11, // 86: fastmeow.v1.GatewayService.EnsureAccount:output_type -> fastmeow.v1.EnsureAccountResponse
+	13, // 87: fastmeow.v1.GatewayService.Connect:output_type -> fastmeow.v1.ConnectResponse
+	15, // 88: fastmeow.v1.GatewayService.Disconnect:output_type -> fastmeow.v1.DisconnectResponse
+	17, // 89: fastmeow.v1.GatewayService.Logout:output_type -> fastmeow.v1.LogoutResponse
+	20, // 90: fastmeow.v1.GatewayService.SendMessage:output_type -> fastmeow.v1.SendMessageResponse
+	22, // 91: fastmeow.v1.GatewayService.StreamEvents:output_type -> fastmeow.v1.StreamEventsResponse
+	38, // 92: fastmeow.v1.GatewayService.ListJoinedGroups:output_type -> fastmeow.v1.ListJoinedGroupsResponse
+	40, // 93: fastmeow.v1.GatewayService.GetGroupInfo:output_type -> fastmeow.v1.GetGroupInfoResponse
+	42, // 94: fastmeow.v1.GatewayService.PreviewGroupInvite:output_type -> fastmeow.v1.PreviewGroupInviteResponse
+	44, // 95: fastmeow.v1.GatewayService.JoinGroupViaInvite:output_type -> fastmeow.v1.JoinGroupViaInviteResponse
+	46, // 96: fastmeow.v1.GatewayService.LeaveGroup:output_type -> fastmeow.v1.LeaveGroupResponse
+	48, // 97: fastmeow.v1.GatewayService.CreateGroup:output_type -> fastmeow.v1.CreateGroupResponse
+	50, // 98: fastmeow.v1.GatewayService.UpdateGroupSettings:output_type -> fastmeow.v1.UpdateGroupSettingsResponse
+	52, // 99: fastmeow.v1.GatewayService.UpdateGroupParticipants:output_type -> fastmeow.v1.UpdateGroupParticipantsResponse
+	55, // 100: fastmeow.v1.GatewayService.GetGroupInviteLink:output_type -> fastmeow.v1.GetGroupInviteLinkResponse
+	57, // 101: fastmeow.v1.GatewayService.MarkRead:output_type -> fastmeow.v1.MarkReadResponse
+	59, // 102: fastmeow.v1.GatewayService.SendPresence:output_type -> fastmeow.v1.SendPresenceResponse
+	61, // 103: fastmeow.v1.GatewayService.SendChatPresence:output_type -> fastmeow.v1.SendChatPresenceResponse
+	63, // 104: fastmeow.v1.GatewayService.SubscribePresence:output_type -> fastmeow.v1.SubscribePresenceResponse
+	75, // 105: fastmeow.v1.GatewayService.SendReaction:output_type -> fastmeow.v1.SendReactionResponse
+	77, // 106: fastmeow.v1.GatewayService.SendEdit:output_type -> fastmeow.v1.SendEditResponse
+	79, // 107: fastmeow.v1.GatewayService.SendRevoke:output_type -> fastmeow.v1.SendRevokeResponse
+	71, // 108: fastmeow.v1.GatewayService.SendMedia:output_type -> fastmeow.v1.SendMediaResponse
+	73, // 109: fastmeow.v1.GatewayService.DownloadMedia:output_type -> fastmeow.v1.DownloadMediaChunk
+	36, // 110: fastmeow.v1.GatewayService.Shutdown:output_type -> fastmeow.v1.ShutdownResponse
+	85, // [85:111] is the sub-list for method output_type
+	59, // [59:85] is the sub-list for method input_type
+	59, // [59:59] is the sub-list for extension type_name
+	59, // [59:59] is the sub-list for extension extendee
+	0,  // [0:59] is the sub-list for field type_name
 }
 
 func init() { file_fastmeow_v1_gateway_proto_init() }
@@ -5394,6 +6288,10 @@ func file_fastmeow_v1_gateway_proto_init() {
 		(*StreamEventsResponse_ChatPresence)(nil),
 		(*StreamEventsResponse_MediaMessage)(nil),
 		(*StreamEventsResponse_Unknown)(nil),
+		(*StreamEventsResponse_Reaction)(nil),
+		(*StreamEventsResponse_MessageEdit)(nil),
+		(*StreamEventsResponse_MessageRevoke)(nil),
+		(*StreamEventsResponse_MessageDeleteForMe)(nil),
 	}
 	file_fastmeow_v1_gateway_proto_msgTypes[63].OneofWrappers = []any{
 		(*SendMediaRequest_Init)(nil),
@@ -5405,7 +6303,7 @@ func file_fastmeow_v1_gateway_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_fastmeow_v1_gateway_proto_rawDesc), len(file_fastmeow_v1_gateway_proto_rawDesc)),
 			NumEnums:      7,
-			NumMessages:   67,
+			NumMessages:   77,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

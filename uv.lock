@@ -26,7 +26,7 @@ wheels = [
 
 [[package]]
 name = "fastmeow"
-version = "0.3.0"
+version = "0.3.1"
 source = { editable = "." }
 dependencies = [
     { name = "grpcio" },
@@ -48,14 +48,14 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "grpcio", specifier = ">=1.68" },
-    { name = "protobuf", specifier = ">=6.31,<7" },
+    { name = "protobuf", specifier = ">=6.31,<8" },
     { name = "pydantic", specifier = ">=2.9" },
     { name = "qrcode", specifier = ">=7.4" },
 ]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "grpcio-tools", specifier = ">=1.74,<2" },
+    { name = "grpcio-tools", specifier = ">=1.74" },
     { name = "mypy", specifier = ">=1.13" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
