@@ -798,7 +798,13 @@ class SendResult:
     （在 5 分钟 / 1 万条目的 LRU 窗口内），而不是实际再次发送，则为 True。"""
 
     @classmethod
-    def from_proto(cls, msg: _pb.SendMessageResponse) -> SendResult:
+    def from_proto(
+        cls,
+        msg: _pb.SendMessageResponse
+        | _pb.SendReactionResponse
+        | _pb.SendEditResponse
+        | _pb.SendRevokeResponse,
+    ) -> SendResult:
         ts = msg.server_timestamp.ToDatetime(tzinfo=UTC)
         return cls(
             message_id=msg.message_id,

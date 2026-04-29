@@ -89,6 +89,54 @@ class _BoundClient:
             reply_to_message_id=reply_to_message_id,
         )
 
+    # -- Reactions / Edits / Revokes（Phase 5）--------------------------
+
+    async def send_reaction(
+        self,
+        chat_jid: str,
+        target_message_id: str,
+        emoji: str,
+        *,
+        target_sender_jid: str | None = None,
+    ) -> SendResult:
+        """对一条消息发 reaction；``emoji=""`` 取消反应。"""
+        return await self._transport.send_reaction(
+            account_key=self.account_key,
+            chat_jid=chat_jid,
+            target_message_id=target_message_id,
+            emoji=emoji,
+            target_sender_jid=target_sender_jid,
+        )
+
+    async def send_edit(
+        self,
+        chat_jid: str,
+        target_message_id: str,
+        new_text: str,
+    ) -> SendResult:
+        """编辑已发送消息文本（20 分钟窗口）。"""
+        return await self._transport.send_edit(
+            account_key=self.account_key,
+            chat_jid=chat_jid,
+            target_message_id=target_message_id,
+            new_text=new_text,
+        )
+
+    async def send_revoke(
+        self,
+        chat_jid: str,
+        target_message_id: str,
+        *,
+        target_sender_jid: str | None = None,
+    ) -> SendResult:
+        """撤回一条消息。"""
+        return await self._transport.send_revoke(
+            account_key=self.account_key,
+            chat_jid=chat_jid,
+            target_message_id=target_message_id,
+            target_sender_jid=target_sender_jid,
+        )
+
     # -- 群组（Phase 4.1）-----------------------------------------------
 
     async def list_groups(self) -> tuple[GroupInfo, ...]:

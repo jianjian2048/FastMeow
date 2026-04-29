@@ -101,6 +101,18 @@ class MessageSendError(MessagingError):
     """sidecar 拒绝交付外发消息。"""
 
 
+class ReactionError(MessagingError):
+    """发送消息反应（React）失败。"""
+
+
+class MessageEditError(MessagingError):
+    """编辑外发消息失败。"""
+
+
+class MessageRevokeError(MessagingError):
+    """撤回外发消息失败。"""
+
+
 # ---------------------------------------------------------------------------
 # 处理器派发
 # ---------------------------------------------------------------------------

@@ -91,6 +91,9 @@ RpcOp = Literal[
     "subscribe_presence",
     "send_media",
     "download_media",
+    "send_reaction",
+    "send_edit",
+    "send_revoke",
 ]
 
 # 上述群组 RPC 的集合，用于在 _translate 中识别群组操作。
@@ -228,6 +231,15 @@ def _translate(
             return InvalidJIDError(detail)
         if op == "send_message":
             return MessageSendError(detail)
+        if op == "send_reaction":
+            from .exceptions import ReactionError
+            return ReactionError(detail)
+        if op == "send_edit":
+            from .exceptions import MessageEditError
+            return MessageEditError(detail)
+        if op == "send_revoke":
+            from .exceptions import MessageRevokeError
+            return MessageRevokeError(detail)
         # 非发送类 RPC 的请求格式错误 = 调用方配置问题。
         return ConfigurationError(f"{op}: invalid argument: {detail}")
 
@@ -356,6 +368,85 @@ class Transport:
             )
         except grpc.aio.AioRpcError as exc:
             raise _translate(exc, op="send_message", account_key=account_key) from exc
+        return SendResult.from_proto(resp)
+
+    async def send_reaction(
+        self,
+        *,
+        account_key: str,
+        chat_jid: str,
+        target_message_id: str,
+        emoji: str,
+        target_sender_jid: str | None = None,
+    ) -> SendResult:
+        """对一条消息发送 reaction（emoji 为空字符串表示取消反应）。
+
+        ``target_sender_jid`` 在 DM 中可空（whatsmeow 会从 chat_jid 推断）；
+        群里给非自己的消息加反应时必须传被反应消息的发送者 JID。
+        """
+        req = pb.SendReactionRequest(
+            account_key=account_key,
+            chat_jid=chat_jid,
+            target_message_id=target_message_id,
+            target_sender_jid=target_sender_jid or "",
+            emoji=emoji,
+        )
+        try:
+            resp: pb.SendReactionResponse = await self._stub.SendReaction(
+                req, timeout=DEFAULT_DEADLINE
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(exc, op="send_reaction", account_key=account_key) from exc
+        return SendResult.from_proto(resp)
+
+    async def send_edit(
+        self,
+        *,
+        account_key: str,
+        chat_jid: str,
+        target_message_id: str,
+        new_text: str,
+    ) -> SendResult:
+        """编辑一条已发送消息的文本（whatsmeow EditWindow=20min 超时后 WhatsApp 拒绝）。"""
+        req = pb.SendEditRequest(
+            account_key=account_key,
+            chat_jid=chat_jid,
+            target_message_id=target_message_id,
+            new_text=new_text,
+        )
+        try:
+            resp: pb.SendEditResponse = await self._stub.SendEdit(
+                req, timeout=DEFAULT_DEADLINE
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(exc, op="send_edit", account_key=account_key) from exc
+        return SendResult.from_proto(resp)
+
+    async def send_revoke(
+        self,
+        *,
+        account_key: str,
+        chat_jid: str,
+        target_message_id: str,
+        target_sender_jid: str | None = None,
+    ) -> SendResult:
+        """撤回一条消息。
+
+        ``target_sender_jid`` 在群里管理员撤回他人消息时必传；撤回自己消息可空
+        （whatsmeow 内部用 EmptyJID 标记 FromMe=true）。
+        """
+        req = pb.SendRevokeRequest(
+            account_key=account_key,
+            chat_jid=chat_jid,
+            target_message_id=target_message_id,
+            target_sender_jid=target_sender_jid or "",
+        )
+        try:
+            resp: pb.SendRevokeResponse = await self._stub.SendRevoke(
+                req, timeout=DEFAULT_DEADLINE
+            )
+        except grpc.aio.AioRpcError as exc:
+            raise _translate(exc, op="send_revoke", account_key=account_key) from exc
         return SendResult.from_proto(resp)
 
     async def stream_events(

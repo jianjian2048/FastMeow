@@ -90,6 +90,38 @@ class AccountClient(Protocol):
         """
         ...
 
+    # -- Reactions / Edits / Revokes（Phase 5）--------------------------
+
+    async def send_reaction(
+        self,
+        chat_jid: str,
+        target_message_id: str,
+        emoji: str,
+        *,
+        target_sender_jid: str | None = None,
+    ) -> SendResult:
+        """对一条消息发 reaction；``emoji=""`` 取消反应。"""
+        ...
+
+    async def send_edit(
+        self,
+        chat_jid: str,
+        target_message_id: str,
+        new_text: str,
+    ) -> SendResult:
+        """编辑一条已发送消息的文本。"""
+        ...
+
+    async def send_revoke(
+        self,
+        chat_jid: str,
+        target_message_id: str,
+        *,
+        target_sender_jid: str | None = None,
+    ) -> SendResult:
+        """撤回一条消息。"""
+        ...
+
     # -- 群组（Phase 4.1） ---------------------------------------------
 
     async def list_groups(self) -> tuple[GroupInfo, ...]:
@@ -511,6 +543,39 @@ class Ctx:
             mime_type=mime_type,
             client_msg_id=client_msg_id,
             quoted_message_id=msg.message_id if quoted else None,
+        )
+
+    # -- Reactions / Edits / Revokes（Phase 5）--------------------------
+
+    async def reply_react(self, emoji: str) -> SendResult:
+        """对当前消息加 reaction；``emoji=""`` 取消反应。
+
+        群里给非自己的消息加反应时会自动透传 ``sender_jid`` 到 sidecar。
+        """
+        msg = self._require_message_event("reply_react")
+        return await self.client.send_reaction(
+            msg.chat_jid,
+            msg.message_id,
+            emoji,
+            target_sender_jid=msg.sender_jid,
+        )
+
+    async def reply_edit(self, new_text: str) -> SendResult:
+        """编辑当前消息（仅自己发的消息可编辑，20 分钟窗口）。"""
+        msg = self._require_message_event("reply_edit")
+        return await self.client.send_edit(
+            msg.chat_jid,
+            msg.message_id,
+            new_text,
+        )
+
+    async def reply_revoke(self) -> SendResult:
+        """撤回当前消息（群管理员可撤回他人消息）。"""
+        msg = self._require_message_event("reply_revoke")
+        return await self.client.send_revoke(
+            msg.chat_jid,
+            msg.message_id,
+            target_sender_jid=msg.sender_jid,
         )
 
     async def download_media(self, media: MediaInfo) -> bytes:
