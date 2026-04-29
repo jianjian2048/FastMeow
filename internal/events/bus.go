@@ -268,6 +268,23 @@ func (b *Bus) translate(accountKey string, evt any) []*pb.StreamEventsResponse {
 		return []*pb.StreamEventsResponse{base}
 
 	case *events.Message:
+		// 优先判断撤回/编辑/反应
+		if revoke := revokeEvent(e); revoke != nil {
+			base := mk()
+			base.Event = &pb.StreamEventsResponse_MessageRevoke{MessageRevoke: revoke}
+			return []*pb.StreamEventsResponse{base}
+		}
+		if edit := editEvent(e); edit != nil {
+			base := mk()
+			base.Event = &pb.StreamEventsResponse_MessageEdit{MessageEdit: edit}
+			return []*pb.StreamEventsResponse{base}
+		}
+		if react := reactionEvent(e); react != nil {
+			base := mk()
+			base.Event = &pb.StreamEventsResponse_Reaction{Reaction: react}
+			return []*pb.StreamEventsResponse{base}
+		}
+
 		// 优先尝试翻译为 MediaMessageEvent（Phase 4.3）。媒体消息在
 		// WhatsApp 协议里独立于 Conversation/ExtendedTextMessage，
 		// 不会被 extractText 拾起，因此先 dispatch 媒体路径。若不是
@@ -293,6 +310,19 @@ func (b *Bus) translate(accountKey string, evt any) []*pb.StreamEventsResponse {
 			JoinedGroup: &pb.JoinedGroupEvent{
 				GroupInfo:  groups.GroupInfoToProto(&e.GroupInfo),
 				JoinReason: e.Reason,
+			},
+		}
+		return []*pb.StreamEventsResponse{base}
+
+	case *events.DeleteForMe:
+		base := mk()
+		base.Event = &pb.StreamEventsResponse_MessageDeleteForMe{
+			MessageDeleteForMe: &pb.MessageDeleteForMeEvent{
+				ChatJid:         e.ChatJID.String(),
+				TargetMessageId: e.MessageID,
+				TimestampMs:     e.Timestamp.UnixMilli(),
+				IsFromMe:        e.IsFromMe,
+				FromFullSync:    false, // events.DeleteForMe is live, not from full sync unless maybe we check SourceWebMsg? For Phase 5 this is enough.
 			},
 		}
 		return []*pb.StreamEventsResponse{base}
@@ -687,3 +717,59 @@ func loggedOutReason(e *events.LoggedOut) string {
 // 是否成功发出的确认，则返回该错误（目前未使用）。
 var errClosedBus = errors.New("events: bus closed")
 var _ = errClosedBus
+
+// reactionEvent 提取反应消息。
+func reactionEvent(e *events.Message) *pb.ReactionEvent {
+	if e == nil || e.Message == nil {
+		return nil
+	}
+	react := e.Message.GetReactionMessage()
+	if react == nil {
+		return nil
+	}
+	return &pb.ReactionEvent{
+		ChatJid:           e.Info.Chat.String(),
+		SenderJid:         e.Info.Sender.String(),
+		TargetMessageId:   react.GetKey().GetID(),
+		Emoji:             react.GetText(),
+		TimestampMs:       e.Info.Timestamp.UnixMilli(),
+		GroupingKey:       react.GetGroupingKey(),
+		SenderTimestampMs: react.GetSenderTimestampMS(),
+	}
+}
+
+// editEvent 提取编辑消息。
+func editEvent(e *events.Message) *pb.MessageEditEvent {
+	if e == nil || !e.IsEdit || e.Message == nil {
+		return nil
+	}
+	return &pb.MessageEditEvent{
+		ChatJid:         e.Info.Chat.String(),
+		SenderJid:       e.Info.Sender.String(),
+		TargetMessageId: e.Info.ID,
+		NewText:         e.Message.GetConversation(),
+		TimestampMs:     e.Info.Timestamp.UnixMilli(),
+	}
+}
+
+// revokeEvent 提取撤回消息。
+func revokeEvent(e *events.Message) *pb.MessageRevokeEvent {
+	if e == nil || e.Message == nil {
+		return nil
+	}
+	pm := e.Message.GetProtocolMessage()
+	if pm != nil && pm.GetType() == waE2E.ProtocolMessage_REVOKE {
+		isAdmin := false
+		if string(e.Info.Edit) == "8" { // EditAttributeAdminRevoke
+			isAdmin = true
+		}
+		return &pb.MessageRevokeEvent{
+			ChatJid:         e.Info.Chat.String(),
+			SenderJid:       e.Info.Sender.String(),
+			TargetMessageId: pm.GetKey().GetID(),
+			IsAdminRevoke:   isAdmin,
+			TimestampMs:     e.Info.Timestamp.UnixMilli(),
+		}
+	}
+	return nil
+}

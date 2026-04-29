@@ -192,3 +192,142 @@ func dedupKey(accountKey, clientMsgID string) string {
 	b.WriteString(clientMsgID)
 	return b.String()
 }
+
+// SendReaction sends or removes a reaction on a target message.
+func (s *Sender) SendReaction(
+	ctx context.Context,
+	cli *whatsmeow.Client,
+	accountKey string,
+	chatJID string,
+	targetMessageID string,
+	targetSenderJID string,
+	emoji string,
+) (*pb.SendReactionResponse, error) {
+	if cli == nil {
+		return nil, errors.New("messages: nil whatsmeow.Client")
+	}
+	if chatJID == "" {
+		return nil, ErrEmptyToJID
+	}
+	if targetMessageID == "" {
+		return nil, errors.New("messages: target_message_id is required")
+	}
+
+	jid, err := types.ParseJID(chatJID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s: %v", ErrInvalidJID, chatJID, err)
+	}
+
+	var senderJID types.JID
+	if targetSenderJID != "" {
+		senderJID, err = types.ParseJID(targetSenderJID)
+		if err != nil {
+			return nil, fmt.Errorf("messages: invalid target_sender_jid: %w", err)
+		}
+	} else {
+		senderJID = types.EmptyJID
+	}
+
+	msg := cli.BuildReaction(jid, senderJID, targetMessageID, emoji)
+
+	resp, err := cli.SendMessage(ctx, jid, msg)
+	if err != nil {
+		return nil, fmt.Errorf("messages: SendReaction to %s: %w", jid, err)
+	}
+
+	return &pb.SendReactionResponse{
+		MessageId:       resp.ID,
+		ServerTimestamp: timestamppb.New(resp.Timestamp),
+		Deduped:         false,
+	}, nil
+}
+
+// SendEdit edits an existing message.
+func (s *Sender) SendEdit(
+	ctx context.Context,
+	cli *whatsmeow.Client,
+	accountKey string,
+	chatJID string,
+	targetMessageID string,
+	newText string,
+) (*pb.SendEditResponse, error) {
+	if cli == nil {
+		return nil, errors.New("messages: nil whatsmeow.Client")
+	}
+	if chatJID == "" {
+		return nil, ErrEmptyToJID
+	}
+	if targetMessageID == "" {
+		return nil, errors.New("messages: target_message_id is required")
+	}
+	if newText == "" {
+		return nil, ErrEmptyBody
+	}
+
+	jid, err := types.ParseJID(chatJID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s: %v", ErrInvalidJID, chatJID, err)
+	}
+
+	newMsg := buildTextMessage(newText, "")
+	msg := cli.BuildEdit(jid, targetMessageID, newMsg)
+
+	resp, err := cli.SendMessage(ctx, jid, msg)
+	if err != nil {
+		return nil, fmt.Errorf("messages: SendEdit to %s: %w", jid, err)
+	}
+
+	return &pb.SendEditResponse{
+		MessageId:       resp.ID,
+		ServerTimestamp: timestamppb.New(resp.Timestamp),
+		Deduped:         false,
+	}, nil
+}
+
+// SendRevoke revokes an existing message.
+func (s *Sender) SendRevoke(
+	ctx context.Context,
+	cli *whatsmeow.Client,
+	accountKey string,
+	chatJID string,
+	targetMessageID string,
+	targetSenderJID string,
+) (*pb.SendRevokeResponse, error) {
+	if cli == nil {
+		return nil, errors.New("messages: nil whatsmeow.Client")
+	}
+	if chatJID == "" {
+		return nil, ErrEmptyToJID
+	}
+	if targetMessageID == "" {
+		return nil, errors.New("messages: target_message_id is required")
+	}
+
+	jid, err := types.ParseJID(chatJID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s: %v", ErrInvalidJID, chatJID, err)
+	}
+
+	var senderJID types.JID
+	if targetSenderJID != "" {
+		senderJID, err = types.ParseJID(targetSenderJID)
+		if err != nil {
+			return nil, fmt.Errorf("messages: invalid target_sender_jid: %w", err)
+		}
+	} else {
+		senderJID = types.EmptyJID
+	}
+
+	msg := cli.BuildRevoke(jid, senderJID, targetMessageID)
+
+	resp, err := cli.SendMessage(ctx, jid, msg)
+	if err != nil {
+		return nil, fmt.Errorf("messages: SendRevoke to %s: %w", jid, err)
+	}
+
+	return &pb.SendRevokeResponse{
+		MessageId:       resp.ID,
+		ServerTimestamp: timestamppb.New(resp.Timestamp),
+		Deduped:         false,
+	}, nil
+}

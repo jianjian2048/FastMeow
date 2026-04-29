@@ -1010,3 +1010,106 @@ func recoverPanic(rpc string) {
 		})
 	}
 }
+
+func (g *gateway) SendReaction(ctx context.Context, req *pb.SendReactionRequest) (*pb.SendReactionResponse, error) {
+	defer recoverPanic("SendReaction")
+	key := req.GetAccountKey()
+	if key == "" {
+		return nil, status.Error(codes.InvalidArgument, "account_key is required")
+	}
+	acct, err := g.registry.Get(key)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "account %q not registered", key)
+	}
+
+	resp, err := g.sender.SendReaction(
+		ctx,
+		acct.Client,
+		key,
+		req.GetChatJid(),
+		req.GetTargetMessageId(),
+		req.GetTargetSenderJid(),
+		req.GetEmoji(),
+	)
+	if err != nil {
+		if errors.Is(err, messages.ErrEmptyToJID) || strings.Contains(err.Error(), "required") {
+			return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if errors.Is(err, messages.ErrInvalidJID) {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid to_jid: %v", err)
+		}
+		return nil, status.Errorf(codes.Internal, "whatsmeow error: %v", err)
+	}
+	if resp.ServerTimestamp == nil {
+		resp.ServerTimestamp = timestamppb.Now()
+	}
+	return resp, nil
+}
+
+func (g *gateway) SendEdit(ctx context.Context, req *pb.SendEditRequest) (*pb.SendEditResponse, error) {
+	defer recoverPanic("SendEdit")
+	key := req.GetAccountKey()
+	if key == "" {
+		return nil, status.Error(codes.InvalidArgument, "account_key is required")
+	}
+	acct, err := g.registry.Get(key)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "account %q not registered", key)
+	}
+
+	resp, err := g.sender.SendEdit(
+		ctx,
+		acct.Client,
+		key,
+		req.GetChatJid(),
+		req.GetTargetMessageId(),
+		req.GetNewText(),
+	)
+	if err != nil {
+		if errors.Is(err, messages.ErrEmptyToJID) || errors.Is(err, messages.ErrEmptyBody) || strings.Contains(err.Error(), "required") {
+			return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if errors.Is(err, messages.ErrInvalidJID) {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid chat_jid: %v", err)
+		}
+		return nil, status.Errorf(codes.Internal, "whatsmeow error: %v", err)
+	}
+	if resp.ServerTimestamp == nil {
+		resp.ServerTimestamp = timestamppb.Now()
+	}
+	return resp, nil
+}
+
+func (g *gateway) SendRevoke(ctx context.Context, req *pb.SendRevokeRequest) (*pb.SendRevokeResponse, error) {
+	defer recoverPanic("SendRevoke")
+	key := req.GetAccountKey()
+	if key == "" {
+		return nil, status.Error(codes.InvalidArgument, "account_key is required")
+	}
+	acct, err := g.registry.Get(key)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "account %q not registered", key)
+	}
+
+	resp, err := g.sender.SendRevoke(
+		ctx,
+		acct.Client,
+		key,
+		req.GetChatJid(),
+		req.GetTargetMessageId(),
+		req.GetTargetSenderJid(),
+	)
+	if err != nil {
+		if errors.Is(err, messages.ErrEmptyToJID) || strings.Contains(err.Error(), "required") {
+			return nil, status.Errorf(codes.InvalidArgument, "%v", err)
+		}
+		if errors.Is(err, messages.ErrInvalidJID) {
+			return nil, status.Errorf(codes.InvalidArgument, "invalid chat_jid: %v", err)
+		}
+		return nil, status.Errorf(codes.Internal, "whatsmeow error: %v", err)
+	}
+	if resp.ServerTimestamp == nil {
+		resp.ServerTimestamp = timestamppb.Now()
+	}
+	return resp, nil
+}
